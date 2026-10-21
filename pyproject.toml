@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clearancewatch"
+version = "0.1.0"
+description = "Track subcontractor compliance per job: WSIB/WCB clearance coverage, insurance and licence expiry against the job calendar"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "calasdan-sketch" }]
+keywords = ["wsib", "wcb", "clearance", "compliance", "construction", "trades", "insurance"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+    "Topic :: Office/Business",
+]
+
+[project.scripts]
+clearancewatch = "clearancewatch.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
