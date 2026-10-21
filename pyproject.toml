@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Track subcontractor compliance per job: WSIB/WCB clearance coverage, insurance and licence expiry against the job calendar"
 readme = "README.md"
 requires-python = ">=3.9"
+license = "MIT"
 authors = [{ name = "calasdan-sketch" }]
 keywords = ["wsib", "wcb", "clearance", "compliance", "construction", "trades", "insurance"]
 classifiers = [
