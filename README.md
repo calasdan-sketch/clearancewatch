@@ -22,9 +22,11 @@ Checked against the regulators' own pages on 2026-11-07:
 pip install clearancewatch   # Python 3.9+, no dependencies
 ```
 
-**Heads-up:** the 0.2.0 features below (`--format`, `--fail-on`, payment-date checks, `.ics`, ...) are unreleased. The version on PyPI when this was written (2026-11-07) was 0.1.0. Until 0.2.0 is published, install from a checkout: `pip install .` (or `PYTHONPATH=src python -m clearancewatch.cli ...`).
+**Heads-up:** everything below is version 0.2.0, which is not on PyPI yet. PyPI still had only 0.1.0 when this was written (checked 2026-11-07), and 0.1.0 has none of the `--format` / `--fail-on` / payment-date / `.ics` features or the `template` command. Until 0.2.0 is published, install from a checkout: `pip install .` (this line is removed when 0.2.0 is released; see `PUBLISH-CHECKLIST.md`).
 
-First run: `clearancewatch template > jobs.json`, then `clearancewatch audit jobs.json --on 2026-02-15` (the template is the example below and passes clean on that date).
+Windows: not run on Windows (no Windows machine was available; reviewed by reading the code only). `clearancewatch template > jobs.json` in Windows PowerShell 5 writes UTF-16; the tool reads that. To get UTF-8 either way, use `clearancewatch template -o jobs.json` (`-o` is on `audit` and `renewals`; for `template` use `>` or copy the output).
+
+First run: `clearancewatch template > jobs.json`, then `clearancewatch audit jobs.json --on 2026-02-15` (the template is the example below and passes clean on that date). On Windows PowerShell use `clearancewatch template -o jobs.json` instead of `>`.
 
 ## Jobs file
 
@@ -56,7 +58,9 @@ clearancewatch audit jobs.json --on 2026-02-15 --within 30
 clearancewatch renewals jobs.json --within 30     # just what's coming due
 clearancewatch audit jobs.json --format md        # chase list grouped by sub, paste into email/ticket
 clearancewatch audit jobs.json --format csv       # for a spreadsheet
-clearancewatch audit jobs.json --json             # machine-readable
+clearancewatch audit jobs.json --json             # machine-readable ("schema": 1, "version": ...)
+clearancewatch audit jobs.json --format github    # GitHub Actions annotations (errors/warnings/notices)
+clearancewatch audit jobs.json --format md -o chase.md   # write UTF-8 to a file; exit code unchanged
 clearancewatch audit jobs.json --format ics > renewals.ics   # calendar events (all-day, 14-day reminder)
 clearancewatch audit jobs.json --payment-on 2026-03-01       # is the clearance good on the day you pay?
 clearancewatch audit jobs.json --active-only      # skip jobs whose end date has passed
@@ -85,6 +89,8 @@ Exit `0` pass, `1` findings at or above `--fail-on` (default: errors), `2` your 
 | `clearance_missing` / `clearance_expired` / `clearance_no_expiry` / `clearance_no_coverage_dates` | error |
 | `clearance_expires_during_job` | error; **warn** when the job is longer than one 90-day clearance could cover from the audit date (nothing can fix that today, so it reads as "plan a renewal"). `--strict-whole-job` keeps the error |
 | `clearance_not_valid_at_payment` (a planned payment date, from `payment_dates` or `--payment-on`, falls after the clearance stops covering it) | warn |
+| `job_has_no_subs` (a job with an empty `subs` list: nothing was checked) | info |
+| `duplicate_job` (two jobs share a name, so reports and `--baseline` cannot tell them apart) | warn |
 | `clearance_exempt` (you recorded `clearance_exempt: "reason"` and no clearance is on file) | info: a note, never fails a run |
 | `clearance_dates_inconsistent` (expires before issued) | error |
 | `clearance_term_exceeds_90_days` (WSIB dates longer than the stated maximum: typo?) | warn |
@@ -143,13 +149,13 @@ Renewal history: give a sub several certificates with `"clearances": [...]` (the
 
 ## Hostile or messy data
 
-Names and issuers come from emails and PDFs. Terminal escapes, bidi/zero-width characters and newlines are shown as `\uXXXX`; CSV cells starting with `= + - @` are neutralised; Markdown table characters and `[ ]` (so a name cannot become a link) are escaped; `.ics` text is escaped per RFC 5545 and cannot inject events; fields are length-capped. A console that cannot show a character (legacy Windows code page, `PYTHONIOENCODING=ascii`) gets a `\x..` escape instead of a crash. Absurd limits (`1e999`, thousand-digit numbers) are reported, not fatal. Typo'd field names are reported rather than silently dropped. Dates must be `YYYY-MM-DD` (years 1900-2200).
+Names and issuers come from emails and PDFs. Terminal escapes, bidi/zero-width characters and newlines are shown as `\uXXXX`; CSV cells starting with `= + - @` are neutralised; Markdown table characters and `[ ]` (so a name cannot become a link) are escaped; `.ics` text is escaped per RFC 5545 and cannot inject events; fields are length-capped. A console that cannot show a character (legacy Windows code page, `PYTHONIOENCODING=ascii`) gets a `\x..` escape instead of a crash. Absurd limits (`1e999`, thousand-digit numbers) are reported, not fatal. Typo'd field names are reported rather than silently dropped. Dates must be `YYYY-MM-DD` (years 1900-2200). Line/paragraph separators (U+2028/2029) are escaped too. `NaN` / `Infinity` in the JSON are refused. Files may be UTF-8, UTF-8 with BOM, or UTF-16 with BOM (what Windows PowerShell 5 writes for `>`).
 
 ## How it compares
 
 | | clearancewatch | Avetta / ComplyWorks / Procore / TrustLayer / myCOI |
 |---|---|---|
-| What it is | free local CLI/library, one JSON file, MIT | commercial platforms (unverified: pricing, exact features) |
+| What it is | free local CLI/library, one JSON file, MIT | commercial platforms (TrustLayer's own site says "Pricing varies depending on platform usage", read 2026-11-07; other prices unverified) |
 | Data leaves your machine | no | unverified; hosted products by design |
 | Sub self-service portal, document upload, COI parsing | **no** | advertised by vendors (unverified) |
 | WSIB / WCB Alberta date rules with sources | yes, see table above | unverified |
@@ -157,7 +163,7 @@ Names and issuers come from emails and PDFs. Terminal escapes, bidi/zero-width c
 | Endorsements (additional insured, waiver, primary/non-contributory) | you type true/false from the certificate; flagged if missing | vendors say they check them automatically (above, unverified) |
 | Calendar export | `.ics`, local | unverified |
 
-Vendor home pages read on 2026-11-07: [avetta.com](https://www.avetta.com/) (supplier safety and compliance, "360,000+ businesses"), [trustlayer.io](https://www.trustlayer.io/) (verification of insurance, licences, compliance docs; Procore panel, API), [illumend.ai](https://www.illumend.ai/) (mycoitracking.com redirected there on that date; says it is myCOI's AI-native product). The closest open-source project found, [OpenCOI](https://github.com/ajayasai/opencoi) (AGPL-3.0, Node.js 24+, PDF extraction with human review, limit comparison USD-only per its README), is a different shape: a self-hosted web app for US-style COIs; it was not run here. [complyworks.com](https://www.complyworks.com/) blocked automated access and a Procore compliance page returned 404, so nothing is claimed about them. None of these products was run or priced; this is not a feature-by-feature review.
+Vendor home pages read on 2026-11-07: [avetta.com](https://www.avetta.com/) (supplier safety and compliance, "360,000+ businesses"), [trustlayer.io](https://www.trustlayer.io/) (verification of insurance, licences, compliance docs; Procore panel, API), [illumend.ai](https://www.illumend.ai/) (mycoitracking.com redirected there on that date; says it is myCOI's AI-native product). The closest open-source project found, [OpenCOI](https://github.com/ajayasai/opencoi) (AGPL-3.0, Node.js 24+, PDF extraction with human review, limit comparison USD-only per its README), is a different shape: a self-hosted web app for US-style COIs; it was not run here, and its GitHub page returned 403 to an automated fetch on the second look (2026-11-07), so those details are from round 3 and not re-checked. [complyworks.com](https://www.complyworks.com/) blocked automated access and a Procore compliance page returned 404, so nothing is claimed about them. None of these products was run or priced; this is not a feature-by-feature review.
 
 ## Benchmark (re-runnable)
 
@@ -167,7 +173,7 @@ Vendor home pages read on 2026-11-07: [avetta.com](https://www.avetta.com/) (sup
 |---|---|---|
 | planted defects caught | 84/84 | 20/84 (24%) |
 | false alarms on 30 clean jobs | 0 | 0 |
-| speed | roughly 20,000-45,000 sub audits/s on a shared cloud VM, one core (varies run to run; yours will differ) | n/a |
+| speed | roughly 17,000-45,000 sub audits/s on a shared cloud VM, one core (varies run to run; yours will differ) | n/a |
 
 History: round 2 measured 64/64 on 16 kinds; the corpus now has 5 more kinds (endorsements, required licence, payment date, ambiguous limit) and a stricter caught-at-right-severity rule. An earlier README said "~130,000 sub audits/s"; that figure was not reproducible and has been removed.
 
@@ -175,6 +181,7 @@ Honest caveat: I wrote both the corpus and the checks, so 84/84 shows the checks
 
 ## Limits
 
+- Not run on Windows or macOS; tested on Linux with Python 3.9, 3.10, 3.11, 3.12 and 3.13 only. The CI file also lists Windows and macOS, but it has not run there yet.
 - You type the dates; nothing is read from PDFs and nothing is checked against WSIB/WCB (no live clearance lookup).
 - Only Ontario (WSIB) and Alberta (WCB) are modelled. Other provinces get date checks plus a warning. A sub's own `province` field is stored but not used; the job's province decides the rules.
 - Payment-date checks compare your dates with the dates you typed. WCB Alberta's page does not say how long a letter stays valid (read 2026-11-07), so for an Alberta letter the tool only checks the letter is dated on or after the payment and says so.

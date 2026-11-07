@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import re
 
-# C0/C1 controls (incl. ESC), DEL, zero-width and bidi formatting characters.
+# C0/C1 controls (incl. ESC), DEL, zero-width, line/paragraph separators and bidi formatting characters.
 _BAD = re.compile(
-    "[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁤⁦-⁩﻿]"
+    "[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\u2066-\u2069\ufeff]"
 )
 MAX_FIELD = 300
 

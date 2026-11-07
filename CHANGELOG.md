@@ -2,6 +2,29 @@
 
 ## 0.2.0 (unreleased)
 
+### Round 4 (first-hour user, release engineer, supply-chain reviewer, docs/DX writer, CI integrator, hostile-input fuzzer, performance engineer, competitor maintainer; see docs/ROUND4.md)
+
+Fixed
+- Source distribution did not contain `bench/` (or the changelog), so `pytest` failed on an unpacked sdist (`No module named 'corpus'`). Added `MANIFEST.in`.
+- `pytest` from a fresh clone failed with `No module named 'clearancewatch'` unless the package was installed first; `pythonpath = ["src"]` is now configured.
+- Build requirement `setuptools>=68` could not read `license = "MIT"` (SPDX, needs 77+); now `>=77`.
+- Metadata: author was a GitHub handle, now "Calas Automations Inc."; added project URLs, Python 3.9-3.13 / OS-independent / typed classifiers; ship `py.typed`.
+- A Windows PowerShell 5 redirect (`clearancewatch template > jobs.json`) writes UTF-16 and the next `audit` said "not UTF-8". UTF-16 files (with BOM) now load.
+- `NaN` / `Infinity` in the JSON were accepted; now exit 2.
+- `--within abc` printed `invalid _non_negative value`; now "expected a whole number of days".
+- U+2028 / U+2029 (line/paragraph separators) in names were not escaped and could split a report line.
+- Closed-pipe handling now also covers the errors Windows reports (EPIPE/EINVAL), and ics output no longer needs `sys.stdout.buffer`.
+- Package docstring still said "a principal must hold a valid clearance for the whole job" as if verified; now says it is house policy, like the README.
+- Two mypy errors; CI now runs ruff and mypy.
+
+Added
+- `--format github` (GitHub Actions annotations) and `-o/--output FILE` (UTF-8, replaced in one step) on `audit`, `renewals`, `template`, `schema`.
+- JSON report gained `"schema": 1` and `"version"`.
+- `job_has_no_subs` (info) and `duplicate_job` (warn).
+- CI matrix: Windows and macOS (not yet run there), Python 3.9 and 3.13, plus "tests pass from the sdist".
+
+Compatibility: nothing removed. New JSON keys and two new finding codes are additive; consumers should already tolerate unknown codes. Recommended release: 0.2.0 (still pre-1.0; behaviour changes in the Round 3 notes below are the reason it is not 0.1.1).
+
 ### Round 3 (contract-compliance auditor, insurance broker, project admin, attacker, performance engineer, docs/DX lead, competitor engineer)
 
 Added

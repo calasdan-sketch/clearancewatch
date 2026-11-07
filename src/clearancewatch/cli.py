@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import errno
 import hashlib
 import io
 import json
@@ -17,7 +18,7 @@ import sys
 from typing import Dict, List, Tuple
 
 from . import __version__
-from .audit import Finding, audit, renewals
+from .audit import Finding, audit, check_jobs, renewals
 from .model import DataError, Job, parse_date
 from .safe import clean, csv_cell, md_cell
 from .schema import TEMPLATE, jobs_schema
@@ -60,8 +61,24 @@ ACTIONS = {
     "insurance_endorsement_unconfirmed": "Check the endorsement on the certificate and record true or false",
     "licence_missing": "Request a copy of the required licence",
     "clearance_exempt": "Confirm the exemption with the regulator and keep the answer on file",
+    "job_has_no_subs": "Add the subcontractors for this job, or remove the job",
+    "duplicate_job": "Give each job a different name (reports and --baseline match on the job name)",
 }
 _RANK = {"error": 0, "warn": 1, "info": 2}
+
+
+def _no_constant(name: str):
+    raise ValueError(f"{name} is not valid JSON; use a real number or leave the field out")
+
+
+def _decode(raw: bytes) -> str:
+    """UTF-8 (with or without BOM), or UTF-16 with a BOM.
+
+    Windows PowerShell 5 writes UTF-16 when you run ``clearancewatch template > jobs.json``.
+    """
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return raw.decode("utf-16")
+    return raw.decode("utf-8-sig")
 
 
 def _read_json(path: str):
@@ -70,12 +87,13 @@ def _read_json(path: str):
         raw = sys.stdin.buffer.read(MAX_BYTES + 1)
         if len(raw) > MAX_BYTES:
             raise OSError(f"input is larger than the {MAX_BYTES} byte limit")
-        return json.loads(raw.decode("utf-8-sig"))
-    size = os.path.getsize(path)
-    if size > MAX_BYTES:
-        raise OSError(f"{path}: file is {size} bytes (limit {MAX_BYTES})")
-    with open(path, encoding="utf-8-sig") as fh:  # utf-8-sig tolerates Excel/Notepad BOMs
-        return json.load(fh)
+    else:
+        size = os.path.getsize(path)
+        if size > MAX_BYTES:
+            raise OSError(f"{path}: file is {size} bytes (limit {MAX_BYTES})")
+        with open(path, "rb") as fh:
+            raw = fh.read(MAX_BYTES + 1)
+    return json.loads(_decode(raw), parse_constant=_no_constant)
 
 
 def load_jobs(path: str) -> Tuple[List[Job], int]:
@@ -94,6 +112,8 @@ def load_jobs(path: str) -> Tuple[List[Job], int]:
         die(f"cannot read {path}: permission denied")
     except UnicodeDecodeError:
         die(f"{path}: not UTF-8 text (save the file as UTF-8)")
+    except UnicodeError:
+        die(f"{path}: not readable text (save the file as UTF-8)")
     except ValueError as e:  # JSONDecodeError, and Python's own limit on absurdly long integers
         die(f"invalid JSON: {e}")
     except RecursionError:
@@ -161,7 +181,8 @@ def _ics_text(value: object) -> str:
 
 def _ics_fold(line: str) -> str:
     """Fold at 75 octets without splitting a UTF-8 character (RFC 5545 section 3.1)."""
-    out, cur, size = [], "", 0
+    out: List[str] = []
+    cur, size = "", 0
     for ch in line:
         n = len(ch.encode("utf-8"))
         if size + n > (75 if not out else 74):
@@ -192,8 +213,26 @@ def render_ics(findings, on: dt.date) -> str:
     return "\r\n".join(_ics_fold(x) for x in lines)
 
 
+_GH_LEVEL = {"error": "error", "warn": "warning", "info": "notice"}
+
+
+def _gh_escape(text: str, prop: bool = False) -> str:
+    text = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    return text.replace(":", "%3A").replace(",", "%2C") if prop else text
+
+
+def render_github(findings) -> str:
+    """GitHub Actions workflow commands: findings show as annotations on the run page."""
+    lines = [f"::{_GH_LEVEL.get(f.severity, 'warning')} title={_gh_escape(clean(f.code), True)}::"
+             f"{_gh_escape(clean(f.subject, 200))}: {_gh_escape(clean(f.detail, 600))}" for f in findings]
+    return "\n".join(lines)
+
+
 def _non_negative(s: str) -> int:
-    v = int(s)
+    try:
+        v = int(s)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a whole number of days, got {s!r}") from None
     if v < 0:
         raise argparse.ArgumentTypeError("must be 0 or more")
     return v
@@ -212,7 +251,9 @@ def _common(p: argparse.ArgumentParser, within_default: int) -> None:
     p.add_argument("--within", type=_non_negative, default=within_default,
                    help=f"renewal horizon in days (default {within_default})")
     p.add_argument("--json", action="store_true", help="same as --format json")
-    p.add_argument("--format", choices=["text", "json", "csv", "md", "ics"], default="text")
+    p.add_argument("--format", choices=["text", "json", "csv", "md", "ics", "github"], default="text")
+    p.add_argument("-o", "--output", metavar="FILE",
+                   help="write the report to FILE (UTF-8) instead of the screen; the exit code is unchanged")
     p.add_argument("--fail-on", choices=["error", "warn", "never"], default="error",
                    help="lowest severity that makes the exit code 1 (default error)")
     p.add_argument("--active-only", action="store_true",
@@ -239,6 +280,7 @@ def load_baseline(path: str) -> List[Tuple[str, str, str, str]]:
     items = data.get("findings") if isinstance(data, dict) else None
     if not isinstance(items, list):
         die(f"{path} is not a clearancewatch --format json report")
+        raise AssertionError  # pragma: no cover
     keys = []
     for f in items:
         if not isinstance(f, dict) or not all(isinstance(f.get(k), str) for k in ("code", "job", "sub", "detail")):
@@ -251,25 +293,58 @@ def _key(f: Finding) -> Tuple[str, str, str, str]:
     return (f.code, f.job, f.sub, f.detail)
 
 
+def _closed_pipe(e: OSError) -> bool:
+    """`... | head` is BrokenPipeError on Unix; Windows can report EPIPE or EINVAL instead."""
+    return isinstance(e, BrokenPipeError) or e.errno in (errno.EPIPE, errno.EINVAL)
+
+
+def _drop_stdout() -> None:
+    try:
+        sys.stdout = open(os.devnull, "w")
+    except OSError:  # pragma: no cover
+        pass
+
+
 def _emit(text: str) -> None:
     try:
         print(text)
         sys.stdout.flush()
-    except BrokenPipeError:  # `... | head`
-        try:
-            sys.stdout = open(os.devnull, "w")
-        except OSError:  # pragma: no cover
-            pass
+    except OSError as e:
+        if not _closed_pipe(e):
+            raise
+        _drop_stdout()
 
 
 def _emit_bytes(data: bytes) -> None:
     """Write bytes untouched (iCalendar needs CRLF, which text mode would double on Windows)."""
     try:
         sys.stdout.flush()
-        sys.stdout.buffer.write(data)
-        sys.stdout.buffer.flush()
-    except BrokenPipeError:
-        sys.stdout = open(os.devnull, "w")
+        buf = getattr(sys.stdout, "buffer", None)
+        if buf is None:  # stdout replaced by a text-only object
+            sys.stdout.write(data.decode("utf-8"))
+            return
+        buf.write(data)
+        buf.flush()
+    except OSError as e:
+        if not _closed_pipe(e):
+            raise
+        _drop_stdout()
+
+
+def _write_output(path: str, data: bytes) -> None:
+    """Write the report to a file: UTF-8, no newline translation, replaced in one step."""
+    tmp = f"{path}.cwtmp{os.getpid()}"
+    try:
+        with open(tmp, "wb") as fh:
+            fh.write(data)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        sys.stderr.write(f"clearancewatch: cannot write {clean(path, 200)}: {clean(e.strerror or e, 200)}\n")
+        raise SystemExit(2) from None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -289,8 +364,10 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--include-during-job", action="store_true",
                    help="also list documents that expire before the job ends, however far out")
 
-    sub.add_parser("template", help="print a starter jobs.json to edit")
-    sub.add_parser("schema", help="print a JSON Schema for the jobs file (for editor validation)")
+    for name, helptext in (("template", "print a starter jobs.json to edit"),
+                           ("schema", "print a JSON Schema for the jobs file (for editor validation)")):
+        t = sub.add_parser(name, help=helptext)
+        t.add_argument("-o", "--output", metavar="FILE", help="write to FILE (UTF-8) instead of the screen")
     return ap
 
 
@@ -305,8 +382,9 @@ def _run(args) -> int:
         for j in jobs:
             j.payment_dates = sorted(set(j.payment_dates) | set(args.payment_on))
 
+    dupes = check_jobs(jobs)
     if args.cmd == "audit":
-        findings = [f for job in jobs for f in audit(job, on=on, horizon=args.within,
+        findings = dupes + [f for job in jobs for f in audit(job, on=on, horizon=args.within,
                                                      strict_whole_job=args.strict_whole_job)]
     else:
         findings = renewals(jobs, within=args.within, on=on, include_during_job=args.include_during_job,
@@ -331,22 +409,32 @@ def _run(args) -> int:
         bits.append(f"{skipped} finished job(s) skipped")
     extra = f" ({'; '.join(bits)})" if bits else ""
     fmt = "json" if args.json else args.format
+    text = ""
     if fmt == "json":
-        doc = {"errors": len(errors), "warnings": len(warns), "info": len(findings) - len(errors) - len(warns),
+        doc: Dict[str, object] = {"schema": 1, "version": __version__, "errors": len(errors),
+               "warnings": len(warns), "info": len(findings) - len(errors) - len(warns),
                "jobs": len(jobs), "findings": [f.as_dict() for f in findings]}
         if args.baseline:
             doc["baseline"] = {"known_hidden": known, "resolved": resolved}
         if skipped:
             doc["skipped_finished_jobs"] = skipped
-        _emit(json.dumps(doc, indent=2))
+        text = json.dumps(doc, indent=2)
     elif fmt == "csv":
-        _emit(render_csv(findings))
+        text = render_csv(findings)
     elif fmt == "md":
-        _emit(render_md(findings, errors, warns, extra))
+        text = render_md(findings, errors, warns, extra)
     elif fmt == "ics":
-        _emit_bytes((render_ics(findings, on) + "\r\n").encode("utf-8"))
+        text = render_ics(findings, on) + "\r\n"
+    elif fmt == "github":
+        text = render_github(findings)
     else:
-        _emit(render_text(findings, errors, warns, extra))
+        text = render_text(findings, errors, warns, extra)
+    if args.output:
+        _write_output(args.output, (text if fmt == "ics" else text + "\n").encode("utf-8"))
+    elif fmt == "ics":
+        _emit_bytes(text.encode("utf-8"))
+    elif text or fmt != "github":
+        _emit(text)
     if args.fail_on == "never":
         return 0
     if args.fail_on == "warn":
@@ -361,11 +449,12 @@ def main(argv: "list[str] | None" = None) -> int:
             stream.reconfigure(errors="backslashreplace")  # type: ignore[union-attr]
         except (AttributeError, ValueError):
             pass
-    if args.cmd == "template":
-        _emit(TEMPLATE)
-        return 0
-    if args.cmd == "schema":
-        _emit(json.dumps(jobs_schema(), indent=2))
+    if args.cmd in ("template", "schema"):
+        text = TEMPLATE if args.cmd == "template" else json.dumps(jobs_schema(), indent=2)
+        if args.output:
+            _write_output(args.output, (text + "\n").encode("utf-8"))
+        else:
+            _emit(text)
         return 0
     try:
         return _run(args)

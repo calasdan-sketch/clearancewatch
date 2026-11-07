@@ -314,6 +314,9 @@ def _check_job(job: Job, out: List[Finding]) -> None:
         out.append(Finding("error", "job_dates_invalid", job.name,
                            f"job ends {job.end.isoformat()} before it starts {job.start.isoformat()}",
                            job.name, ""))
+    if not job.subs:
+        out.append(Finding("info", "job_has_no_subs", job.name, "no subcontractors listed, so nothing was checked",
+                           job.name, ""))
     seen_names: Dict[str, int] = {}
     seen_numbers: Dict[str, Dict[str, None]] = {}
     for sub in job.subs:
@@ -335,6 +338,20 @@ def _check_job(job: Job, out: List[Finding]) -> None:
                                f"clearance number {n} appears on different subs: {_names(list(names))} "
                                "(copy-paste error, or a sub using someone else's certificate)",
                                job.name, ""))
+
+
+def check_jobs(jobs: List[Job]) -> List[Finding]:
+    """Checks that need the whole file: two jobs with one name make reports and baselines ambiguous."""
+    counts: Dict[str, int] = {}
+    for j in jobs:
+        counts[j.name.strip().casefold()] = counts.get(j.name.strip().casefold(), 0) + 1
+    out: List[Finding] = []
+    for key, n in counts.items():
+        if n > 1:
+            name = next(j.name for j in jobs if j.name.strip().casefold() == key)
+            out.append(Finding("warn", "duplicate_job", name, f"{n} jobs share this name, so findings and --baseline "
+                               "cannot tell them apart", name, ""))
+    return out
 
 
 def audit(job: Job, on: Optional[dt.date] = None, horizon: int = 30,

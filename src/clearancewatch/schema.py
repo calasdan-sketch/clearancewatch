@@ -1,6 +1,6 @@
 """The starter file and a JSON Schema for the jobs file.
 
-``tests/test_schema.py`` keeps the schema's field names in step with the model,
+``tests/test_round3.py`` keeps the schema's field names in step with the model,
 so the two cannot drift apart silently.
 """
 from __future__ import annotations

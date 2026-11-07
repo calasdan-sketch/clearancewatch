@@ -1,0 +1,6 @@
+include LICENSE README.md CHANGELOG.md PUBLISH-CHECKLIST.md
+recursive-include src/clearancewatch py.typed
+graft tests
+graft bench
+graft docs
+global-exclude __pycache__ *.py[cod]
