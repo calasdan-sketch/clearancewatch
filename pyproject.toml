@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clearancewatch"
-version = "0.1.0"
+version = "0.2.0"
 description = "Track subcontractor compliance per job: WSIB/WCB clearance coverage, insurance and licence expiry against the job calendar"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -22,3 +22,9 @@ clearancewatch = "clearancewatch.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F"]

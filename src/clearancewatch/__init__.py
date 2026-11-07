@@ -6,11 +6,11 @@ a valid clearance for the whole job; WCB Alberta clearance letters cover work up
 to the date of the letter.
 """
 
-from .model import Clearance, Insurance, Job, Licence, Subcontractor
+from .model import Clearance, DataError, Insurance, Job, Licence, Requirements, Subcontractor
 from .audit import Finding, audit, renewals
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
-    "Job", "Subcontractor", "Clearance", "Insurance", "Licence",
+    "Job", "Subcontractor", "Clearance", "Insurance", "Licence", "Requirements", "DataError",
     "audit", "renewals", "Finding", "__version__",
 ]

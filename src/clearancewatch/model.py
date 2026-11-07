@@ -2,16 +2,53 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 WSIB_DEFAULT_VALID_DAYS = 90  # WSIB: clearance certificates valid up to 90 days
 
+_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-def parse_date(value: Optional[str]) -> Optional[dt.date]:
+
+class DataError(ValueError):
+    """The jobs data is malformed. The message names the offending field."""
+
+
+def parse_date(value: Any, path: str = "date") -> Optional[dt.date]:
+    """Strict YYYY-MM-DD (rejects numbers, '20260101', week dates, impossible days)."""
     if value in (None, ""):
         return None
-    return dt.date.fromisoformat(str(value))
+    if not isinstance(value, str) or not _ISO.match(value.strip()):
+        raise DataError(f"{path}: expected a date like 2026-03-31, got {value!r}")
+    try:
+        d = dt.date.fromisoformat(value.strip())
+    except ValueError:
+        raise DataError(f"{path}: not a real calendar date: {value!r}") from None
+    if not 1900 <= d.year <= 2200:  # also keeps date arithmetic away from the min/max overflow edge
+        raise DataError(f"{path}: year {d.year} is implausible (expected 1900-2200): {value!r}")
+    return d
+
+
+def _obj(d: Any, path: str) -> Dict[str, Any]:
+    if not isinstance(d, dict):
+        raise DataError(f"{path}: expected an object, got {type(d).__name__}")
+    return d
+
+
+def _text(d: Dict[str, Any], key: str, path: str, default: str = "") -> str:
+    v = d.get(key, default)
+    if v is None:
+        return default
+    if isinstance(v, (dict, list, bool)):
+        raise DataError(f"{path}.{key}: expected text, got {type(v).__name__}")
+    return str(v)
+
+
+def _unknown(d: Dict[str, Any], known: set, path: str, notes: List[str]) -> None:
+    for k in d:
+        if k not in known:
+            notes.append(f"{path}: unrecognised field {k!r} was ignored (typo?)")
 
 
 @dataclass
@@ -30,11 +67,21 @@ class Clearance:
     expires: Optional[dt.date] = None
     covered_until: Optional[dt.date] = None  # Alberta-style letter coverage
 
+    _KEYS = {"issuer", "number", "issued", "expires", "covered_until"}
+
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Clearance":
-        return cls(issuer=d.get("issuer", ""), number=d.get("number", ""),
-                   issued=parse_date(d.get("issued")), expires=parse_date(d.get("expires")),
-                   covered_until=parse_date(d.get("covered_until")))
+    def from_dict(cls, d: Dict[str, Any], path: str = "clearance",
+                  notes: Optional[List[str]] = None) -> "Clearance":
+        d = _obj(d, path)
+        if notes is not None:
+            _unknown(d, cls._KEYS, path, notes)
+        return cls(issuer=_text(d, "issuer", path), number=_text(d, "number", path),
+                   issued=parse_date(d.get("issued"), f"{path}.issued"),
+                   expires=parse_date(d.get("expires"), f"{path}.expires"),
+                   covered_until=parse_date(d.get("covered_until"), f"{path}.covered_until"))
+
+    def is_blank(self) -> bool:
+        return not (self.issuer or self.issued or self.expires or self.covered_until)
 
     def effective_expiry(self, valid_days: int = WSIB_DEFAULT_VALID_DAYS) -> Optional[dt.date]:
         if self.expires:
@@ -51,10 +98,17 @@ class Insurance:
     coverage: str = ""          # e.g. "C$2M liability"
     expires: Optional[dt.date] = None
 
+    _KEYS = {"provider", "policy", "coverage", "expires"}
+
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Insurance":
-        return cls(provider=d.get("provider", ""), policy=d.get("policy", ""),
-                   coverage=d.get("coverage", ""), expires=parse_date(d.get("expires")))
+    def from_dict(cls, d: Dict[str, Any], path: str = "insurance",
+                  notes: Optional[List[str]] = None) -> "Insurance":
+        d = _obj(d, path)
+        if notes is not None:
+            _unknown(d, cls._KEYS, path, notes)
+        return cls(provider=_text(d, "provider", path), policy=_text(d, "policy", path),
+                   coverage=_text(d, "coverage", path),
+                   expires=parse_date(d.get("expires"), f"{path}.expires"))
 
 
 @dataclass
@@ -64,10 +118,17 @@ class Licence:
     authority: str = ""         # e.g. "TSSA", "ESA"
     expires: Optional[dt.date] = None
 
+    _KEYS = {"name", "number", "authority", "expires"}
+
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Licence":
-        return cls(name=d.get("name", ""), number=d.get("number", ""),
-                   authority=d.get("authority", ""), expires=parse_date(d.get("expires")))
+    def from_dict(cls, d: Dict[str, Any], path: str = "licence",
+                  notes: Optional[List[str]] = None) -> "Licence":
+        d = _obj(d, path)
+        if notes is not None:
+            _unknown(d, cls._KEYS, path, notes)
+        return cls(name=_text(d, "name", path), number=_text(d, "number", path),
+                   authority=_text(d, "authority", path),
+                   expires=parse_date(d.get("expires"), f"{path}.expires"))
 
 
 @dataclass
@@ -78,17 +139,62 @@ class Subcontractor:
     clearance: Optional[Clearance] = None
     insurance: Optional[Insurance] = None
     licences: List[Licence] = field(default_factory=list)
+    # Earlier/other certificates (renewal history). ``clearance`` stays the primary one.
+    clearances: List[Clearance] = field(default_factory=list)
+
+    _KEYS = {"name", "province", "trade", "clearance", "clearances", "insurance", "licences"}
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Subcontractor":
+    def from_dict(cls, d: Dict[str, Any], path: str = "sub",
+                  notes: Optional[List[str]] = None) -> "Subcontractor":
+        d = _obj(d, path)
+        if notes is not None:
+            _unknown(d, cls._KEYS, path, notes)
+        hist_raw = d.get("clearances") or []
+        if not isinstance(hist_raw, list):
+            raise DataError(f"{path}.clearances: expected a list")
+        hist = [Clearance.from_dict(x, f"{path}.clearances[{i}]", notes) for i, x in enumerate(hist_raw)]
+        lic_raw = d.get("licences") or []
+        if not isinstance(lic_raw, list):
+            raise DataError(f"{path}.licences: expected a list")
+        primary = Clearance.from_dict(d["clearance"], f"{path}.clearance", notes) if d.get("clearance") else None
         return cls(
-            name=d.get("name", "unnamed sub"),
-            province=d.get("province", ""),
-            trade=d.get("trade", ""),
-            clearance=Clearance.from_dict(d["clearance"]) if d.get("clearance") else None,
-            insurance=Insurance.from_dict(d["insurance"]) if d.get("insurance") else None,
-            licences=[Licence.from_dict(x) for x in d.get("licences", [])],
+            name=_text(d, "name", path, "unnamed sub") or "unnamed sub",
+            province=_text(d, "province", path),
+            trade=_text(d, "trade", path),
+            clearance=primary,
+            insurance=Insurance.from_dict(d["insurance"], f"{path}.insurance", notes) if d.get("insurance") else None,
+            licences=[Licence.from_dict(x, f"{path}.licences[{i}]", notes) for i, x in enumerate(lic_raw)],
+            clearances=hist,
         )
+
+    def all_clearances(self) -> List[Clearance]:
+        out = ([self.clearance] if self.clearance else []) + list(self.clearances)
+        return [c for c in out if not c.is_blank()]
+
+
+@dataclass
+class Requirements:
+    """Contract requirements the principal sets for every sub on a job."""
+
+    min_liability: Optional[int] = None   # CAD dollars; parsed from 2000000 or "C$2M"
+
+    _KEYS = {"min_liability"}
+
+    @classmethod
+    def from_dict(cls, d: Any, path: str = "requirements",
+                  notes: Optional[List[str]] = None) -> "Requirements":
+        from .money import parse_limit
+        d = _obj(d, path)
+        if notes is not None:
+            _unknown(d, cls._KEYS, path, notes)
+        raw = d.get("min_liability")
+        if raw in (None, ""):
+            return cls()
+        amount, problem = parse_limit(raw)
+        if amount is None:
+            raise DataError(f"{path}.min_liability: cannot read {raw!r} ({problem})")
+        return cls(min_liability=amount)
 
 
 @dataclass
@@ -98,13 +204,25 @@ class Job:
     start: Optional[dt.date] = None
     end: Optional[dt.date] = None  # None = ongoing
     subs: List[Subcontractor] = field(default_factory=list)
+    requirements: Requirements = field(default_factory=Requirements)
+    notes: List[str] = field(default_factory=list)  # load-time schema warnings
+
+    _KEYS = {"name", "province", "start", "end", "subs", "subcontractors", "requirements"}
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Job":
+    def from_dict(cls, d: Dict[str, Any], path: str = "job") -> "Job":
+        d = _obj(d, path)
+        notes: List[str] = []
+        _unknown(d, cls._KEYS, path, notes)
+        subs_raw = d.get("subs", d.get("subcontractors", [])) or []
+        if not isinstance(subs_raw, list):
+            raise DataError(f"{path}.subs: expected a list")
         return cls(
-            name=d.get("name", "unnamed job"),
-            province=d.get("province", ""),
-            start=parse_date(d.get("start")),
-            end=parse_date(d.get("end")),
-            subs=[Subcontractor.from_dict(s) for s in d.get("subs", d.get("subcontractors", []))],
+            name=_text(d, "name", path, "unnamed job") or "unnamed job",
+            province=_text(d, "province", path),
+            start=parse_date(d.get("start"), f"{path}.start"),
+            end=parse_date(d.get("end"), f"{path}.end"),
+            subs=[Subcontractor.from_dict(s, f"{path}.subs[{i}]", notes) for i, s in enumerate(subs_raw)],
+            requirements=Requirements.from_dict(d.get("requirements") or {}, f"{path}.requirements", notes),
+            notes=notes,
         )

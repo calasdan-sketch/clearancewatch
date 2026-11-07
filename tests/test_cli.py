@@ -55,6 +55,6 @@ def test_missing_file(tmp_path):
     try:
         main(["audit", str(tmp_path / "nope.json")])
         raised = False
-    except SystemExit as e:
+    except SystemExit:
         raised = True
     assert raised
