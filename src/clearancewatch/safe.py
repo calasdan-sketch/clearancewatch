@@ -39,4 +39,7 @@ def csv_cell(value: object) -> str:
 
 def md_cell(value: object) -> str:
     """``clean`` plus Markdown-table escaping."""
-    return clean(value).replace("\\", "\\\\").replace("|", "\\|").replace("`", "\\`").replace("<", "&lt;")
+    text = clean(value).replace("\\", "\\\\")
+    for ch, rep in (("|", "\\|"), ("`", "\\`"), ("<", "&lt;"), ("[", "\\["), ("]", "\\]")):
+        text = text.replace(ch, rep)
+    return text

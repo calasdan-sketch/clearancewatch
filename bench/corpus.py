@@ -21,23 +21,34 @@ def clean_job(rng, i):
     start = ON - dt.timedelta(days=rng.randint(5, 40))
     end = ON + dt.timedelta(days=rng.randint(30, 80))
     issued = ON - dt.timedelta(days=rng.randint(1, 10))
-    return {
+    j = {
         "name": f"Job {i}", "province": "ON", "start": iso(start), "end": iso(end),
-        "requirements": {"min_liability": 2_000_000},
+        "requirements": {"min_liability": 2_000_000, "additional_insured": True,
+                         "required_licences": {"electrical": "trade licence"}},
+        "payment_dates": [iso(ON + dt.timedelta(days=20))],
         "subs": [{
-            "name": f"Sub {i}",
+            "name": f"Sub {i}", "trade": "electrical",
             "clearance": {"issuer": "WSIB", "number": f"{1000000 + i}", "issued": iso(issued),
                           "expires": iso(issued + dt.timedelta(days=90))},
-            "insurance": {"provider": "Aviva", "policy": f"P-{i}", "coverage": "C$2M",
+            "insurance": {"provider": "Aviva", "policy": f"P-{i}", "coverage": "C$2M per occurrence, C$4M aggregate",
+                          "additional_insured": True,
                           "expires": iso(end + dt.timedelta(days=rng.randint(60, 300)))},
             "licences": [{"name": "Trade licence", "expires": iso(end + dt.timedelta(days=rng.randint(60, 300)))}],
         }],
     }
+    if i % 3 == 1:  # an ongoing job (no end date) and two more subs, each with its own certificate
+        j["end"] = None
+        for k in (1, 2):
+            other = copy.deepcopy(j["subs"][0])
+            other["name"] = f"Sub {i}-{k}"
+            other["clearance"]["number"] = f"{2000000 + i * 10 + k}"
+            j["subs"].append(other)
+        # no end date: insurance/licence cannot run out "during the job"
+    return j
 
 
 def _mutate(kind, j, rng):
     s = j["subs"][0]
-    start, end = dt.date.fromisoformat(j["start"]), dt.date.fromisoformat(j["end"])
     if kind == "clearance_expired":
         iss = ON - dt.timedelta(days=rng.randint(100, 200))
         s["clearance"].update(issued=iso(iss), expires=iso(iss + dt.timedelta(days=90)))
@@ -81,6 +92,16 @@ def _mutate(kind, j, rng):
         other = copy.deepcopy(s)
         other["name"] = "Other Sub"
         j["subs"].append(other)
+    elif kind == "insurance_endorsement_missing":
+        s["insurance"]["additional_insured"] = False
+    elif kind == "insurance_endorsement_unconfirmed":
+        s["insurance"].pop("additional_insured")
+    elif kind == "licence_missing":
+        s["licences"] = []
+    elif kind == "clearance_not_valid_at_payment":
+        j["payment_dates"] = [iso(ON + dt.timedelta(days=rng.randint(100, 200)))]
+    elif kind == "insurance_limit_ambiguous":
+        s["insurance"]["coverage"] = rng.choice(["C$1M / C$2M aggregate", "$1,000,000 + $5M umbrella"])
     elif kind == "clearance_gap":
         j["end"] = iso(ON + dt.timedelta(days=60))
         a_iss = ON - dt.timedelta(days=100)
@@ -91,7 +112,6 @@ def _mutate(kind, j, rng):
         j["start"] = iso(a_iss)
     else:
         raise ValueError(kind)
-    del start, end
 
 
 DEFECTS = [
@@ -99,9 +119,23 @@ DEFECTS = [
     "clearance_cover_lapsed", "issuer_mismatch", "clearance_dates_inconsistent",
     "clearance_term_exceeds_90_days", "insurance_below_minimum", "insurance_expired", "insurance_missing",
     "licence_expired", "clearance_no_expiry", "unknown_field", "clearance_number_shared", "clearance_gap",
+    "insurance_endorsement_missing", "licence_missing", "clearance_not_valid_at_payment",
+    "insurance_limit_ambiguous", "insurance_endorsement_unconfirmed",
 ]
+# The severity each planted defect must be reported at (a defect found at the wrong severity is a miss).
+SEVERITY = {
+    "clearance_expired": "error",
+    "clearance_expires_during_job": "warn",  # the corpus job outlasts one 90-day clearance
+    "clearance_missing": "error", "renewal_due": "warn", "clearance_cover_lapsed": "warn",
+    "issuer_mismatch": "warn", "clearance_dates_inconsistent": "error", "clearance_term_exceeds_90_days": "warn",
+    "insurance_below_minimum": "error", "insurance_expired": "error", "insurance_missing": "error",
+    "licence_expired": "error", "clearance_no_expiry": "error", "unknown_field": "warn",
+    "clearance_number_shared": "warn", "clearance_gap": "warn", "insurance_endorsement_missing": "error",
+    "licence_missing": "error", "clearance_not_valid_at_payment": "warn", "insurance_limit_ambiguous": "warn",
+    "insurance_endorsement_unconfirmed": "warn",
+}
 PER_DEFECT = 4
-CLEAN = 24
+CLEAN = 30
 
 
 def build(seed=20261107):

@@ -16,36 +16,43 @@ from __future__ import annotations
 import datetime as dt
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Dict, List, Optional
 
 from .model import Clearance, Job, Subcontractor, WSIB_DEFAULT_VALID_DAYS
-from .money import parse_limit
+from .money import parse_limits, primary_limit
 
 
 @dataclass(frozen=True)
 class Finding:
-    severity: str  # error | warn
+    severity: str  # error | warn | info (info = a note for a human; never fails a run)
     code: str
     subject: str   # "job / sub"
     detail: str
     job: str = ""
     sub: str = ""
+    due: Optional[dt.date] = None  # the date a renewal/expiry falls on, when the finding has one
 
     def as_dict(self):
-        return {"severity": self.severity, "code": self.code,
-                "subject": self.subject, "detail": self.detail,
-                "job": self.job, "sub": self.sub}
+        out = {"severity": self.severity, "code": self.code,
+               "subject": self.subject, "detail": self.detail,
+               "job": self.job, "sub": self.sub}
+        if self.due is not None:
+            out["due"] = self.due.isoformat()
+        return out
 
 
 _PROVINCES = {"ON": "ON", "ONTARIO": "ON", "AB": "AB", "ALBERTA": "AB"}
 
 
+@lru_cache(maxsize=1024)
 def _province(value: str) -> str:
     """Normalised province for the two modelled jurisdictions, else upper-cased text."""
     v = (value or "").strip().upper()
     return _PROVINCES.get(v, v)
 
 
+@lru_cache(maxsize=1024)
 def _issuer_family(issuer: str) -> str:
     """ON (WSIB), AB (WCB Alberta), WCB (some other/unspecified WCB), or ''.
 
@@ -61,6 +68,12 @@ def _issuer_family(issuer: str) -> str:
     return ""
 
 
+def _names(names: List[str], limit: int = 5) -> str:
+    shown = ", ".join(names[:limit])
+    return shown + (f" and {len(names) - limit} more" if len(names) > limit else "")
+
+
+@lru_cache(maxsize=4096)
 def _norm_number(n: str) -> str:
     return re.sub(r"[^A-Z0-9]", "", (n or "").upper())
 
@@ -70,8 +83,16 @@ class _Ctx:
         self.job, self.sub, self.out = job, sub, out
         self.who = f"{job.name} / {sub.name}"
 
-    def add(self, severity: str, code: str, detail: str) -> None:
-        self.out.append(Finding(severity, code, self.who, detail, self.job.name, self.sub.name))
+    def add(self, severity: str, code: str, detail: str, due: Optional[dt.date] = None) -> None:
+        self.out.append(Finding(severity, code, self.who, detail, self.job.name, self.sub.name, due))
+
+
+def _expiry(c: Clearance, prov: str, valid_days: int) -> Optional[dt.date]:
+    """Stated expiry, or issued + 90 days only where that is a WSIB rule (never for other boards)."""
+    family = _issuer_family(c.issuer)
+    if family == "ON" or (family == "" and prov in ("", "ON")):
+        return c.effective_expiry(valid_days)
+    return c.expires or c.covered_until
 
 
 def _latest(certs: List[Clearance], valid_days: int) -> Clearance:
@@ -101,8 +122,9 @@ def _check_dates_sane(x: _Ctx, c: Clearance, family: str, on: dt.date, valid_day
 def _check_gaps(x: _Ctx, certs: List[Clearance], on: dt.date, valid_days: int) -> None:
     """Dated stretches inside the job window with no valid certificate on file."""
     spans = []
+    prov = _province(x.job.province)
     for c in certs:
-        exp = c.effective_expiry(valid_days)
+        exp = _expiry(c, prov, valid_days)
         if c.issued and exp and exp >= c.issued:
             spans.append((c.issued, exp))
     spans.sort()
@@ -120,10 +142,15 @@ def _check_gaps(x: _Ctx, certs: List[Clearance], on: dt.date, valid_days: int) -
         reach = max(reach, e)
 
 
-def _check_clearance(x: _Ctx, on: dt.date, horizon: int, valid_days: int) -> None:
+def _check_clearance(x: _Ctx, on: dt.date, horizon: int, valid_days: int, strict_whole_job: bool = False) -> None:
     job, sub = x.job, x.sub
     certs = sub.all_clearances()
     if not certs:
+        if sub.clearance_exempt:
+            x.add("info", "clearance_exempt",
+                  f"no clearance on file; recorded as not needed because: {sub.clearance_exempt}. "
+                  "Confirm that with the regulator, not with the sub")
+            return
         x.add("error", "clearance_missing", "no clearance certificate on file")
         return
     c = _latest(certs, valid_days)
@@ -169,11 +196,50 @@ def _check_clearance(x: _Ctx, on: dt.date, horizon: int, valid_days: int) -> Non
     if expiry < on:
         x.add("error", "clearance_expired", f"clearance expired {expiry.isoformat()}")
     elif job.end and expiry < job.end:
-        x.add("error", "clearance_expires_during_job",
-              f"clearance expires {expiry.isoformat()} before job end {job.end.isoformat()}; "
-              "a principal must hold valid clearance for the whole job")
+        # No 90-day WSIB clearance, even one requested today, can span the rest of a longer job,
+        # so an error would stay unresolvable until the last certificate: warn instead
+        # (strict_whole_job restores the error).
+        impossible = not strict_whole_job and default_ok and (job.end - on).days > valid_days
+        if impossible and (expiry - on).days <= horizon:
+            x.add("warn", "renewal_due", f"clearance expires {expiry.isoformat()} (within {horizon} days)", expiry)
+        elif impossible:
+            x.add("warn", "clearance_expires_during_job",
+                  f"clearance expires {expiry.isoformat()} before job end {job.end.isoformat()}; the job is "
+                  f"longer than one {valid_days}-day clearance, so plan a renewal before that date", expiry)
+        else:
+            x.add("error", "clearance_expires_during_job",
+                  f"clearance expires {expiry.isoformat()} before job end {job.end.isoformat()}; "
+                  "house policy: hold a valid clearance for the whole job", expiry)
     elif (expiry - on).days <= horizon:
-        x.add("warn", "renewal_due", f"clearance expires {expiry.isoformat()} (within {horizon} days)")
+        x.add("warn", "renewal_due", f"clearance expires {expiry.isoformat()} (within {horizon} days)", expiry)
+
+
+def _check_payments(x: _Ctx, on: dt.date, valid_days: int) -> None:
+    """Planned payment dates vs the clearance on file (WCB Alberta: get one before releasing payment)."""
+    certs = x.sub.all_clearances()
+    if not certs or not x.job.payment_dates:
+        return
+    for pay in sorted(set(x.job.payment_dates)):
+        if pay < on:
+            continue  # already paid: nothing left to act on
+        ok = False
+        latest_cover: Optional[dt.date] = None
+        for c in certs:
+            alberta = _issuer_family(c.issuer) == "AB" or c.covered_until is not None
+            if alberta:
+                cover = c.covered_until or c.issued
+                latest_cover = max(filter(None, [latest_cover, cover]), default=None)
+                if cover is not None and cover >= pay:
+                    ok = True
+            else:
+                exp = _expiry(c, _province(x.job.province), valid_days)
+                if exp is not None and exp >= pay and (c.issued is None or c.issued <= pay):
+                    ok = True
+        if not ok:
+            extra = (f" (latest letter is dated {latest_cover.isoformat()}; WCB Alberta does not state how long "
+                     "a letter stays good, so request a fresh one before paying)") if latest_cover else ""
+            x.add("warn", "clearance_not_valid_at_payment",
+                  f"planned payment {pay.isoformat()} is after the clearance on file stops covering it{extra}")
 
 
 def _check_insurance(x: _Ctx, on: dt.date, horizon: int) -> None:
@@ -183,27 +249,49 @@ def _check_insurance(x: _Ctx, on: dt.date, horizon: int) -> None:
         return
     minimum = job.requirements.min_liability
     if minimum is not None:
-        amount, problem = parse_limit(ins.coverage)
+        amounts, problem = parse_limits(ins.coverage)
+        amount = primary_limit(amounts) if amounts else None
         if amount is None:
             x.add("warn", "insurance_limit_unreadable",
                   f"cannot check the C${minimum:,} minimum: coverage {ins.coverage!r} is {problem}")
         elif amount < minimum:
-            x.add("error", "insurance_below_minimum",
-                  f"coverage {ins.coverage!r} (C${amount:,}) is below the job minimum C${minimum:,}")
+            labelled = any(lab for _, lab in amounts)
+            if len(amounts) > 1 and not labelled and any(a >= minimum for a, _ in amounts):
+                x.add("warn", "insurance_limit_ambiguous",
+                      f"coverage {ins.coverage!r} lists several amounts and the first (C${amount:,}) is below the "
+                      f"C${minimum:,} minimum; cannot tell which is the per-occurrence limit. Read the certificate")
+            else:
+                x.add("error", "insurance_below_minimum",
+                      f"coverage {ins.coverage!r} (C${amount:,}) is below the job minimum C${minimum:,}")
+    req = job.requirements
+    for attr, label in (("additional_insured", "additional insured"),
+                        ("waiver_of_subrogation", "waiver of subrogation"),
+                        ("primary_noncontributory", "primary and non-contributory wording")):
+        if getattr(req, attr):
+            got = getattr(ins, attr)
+            if got is False:
+                x.add("error", "insurance_endorsement_missing", f"contract requires {label}; certificate says no")
+            elif got is None:
+                x.add("warn", "insurance_endorsement_unconfirmed",
+                      f"contract requires {label}; nothing recorded for this certificate (read the endorsement)")
     if ins.expires is None:
         x.add("warn", "insurance_no_expiry", "insurance has no expiry date recorded")
         return
     if ins.expires < on:
         x.add("error", "insurance_expired", f"insurance expired {ins.expires.isoformat()}")
     elif job.end and ins.expires < job.end:
-        x.add("warn", "insurance_expires_during_job", f"insurance expires {ins.expires.isoformat()} before job end")
+        x.add("warn", "insurance_expires_during_job", f"insurance expires {ins.expires.isoformat()} before job end",
+              ins.expires)
     elif (ins.expires - on).days <= horizon:
         x.add("warn", "insurance_renewal_due",
-              f"insurance expires {ins.expires.isoformat()} (within {horizon} days)")
+              f"insurance expires {ins.expires.isoformat()} (within {horizon} days)", ins.expires)
 
 
 def _check_licences(x: _Ctx, on: dt.date, horizon: int) -> None:
     job = x.job
+    needle = job.requirements.required_licences.get(x.sub.trade.strip().casefold())
+    if needle and not any(needle in (lic.name or "").casefold() for lic in x.sub.licences):
+        x.add("error", "licence_missing", f"trade {x.sub.trade!r} needs a licence matching {needle!r}; none on file")
     for lic in x.sub.licences:
         label = lic.name or "licence"
         if lic.expires is None:
@@ -212,9 +300,11 @@ def _check_licences(x: _Ctx, on: dt.date, horizon: int) -> None:
         if lic.expires < on:
             x.add("error", "licence_expired", f"{label} expired {lic.expires.isoformat()}")
         elif job.end and lic.expires < job.end:
-            x.add("warn", "licence_expires_during_job", f"{label} expires {lic.expires.isoformat()} before job end")
+            x.add("warn", "licence_expires_during_job", f"{label} expires {lic.expires.isoformat()} before job end",
+                  lic.expires)
         elif (lic.expires - on).days <= horizon:
-            x.add("warn", "licence_renewal_due", f"{label} expires {lic.expires.isoformat()} (within {horizon} days)")
+            x.add("warn", "licence_renewal_due", f"{label} expires {lic.expires.isoformat()} (within {horizon} days)",
+                  lic.expires)
 
 
 def _check_job(job: Job, out: List[Finding]) -> None:
@@ -225,14 +315,14 @@ def _check_job(job: Job, out: List[Finding]) -> None:
                            f"job ends {job.end.isoformat()} before it starts {job.start.isoformat()}",
                            job.name, ""))
     seen_names: Dict[str, int] = {}
-    seen_numbers: Dict[str, List[str]] = {}
+    seen_numbers: Dict[str, Dict[str, None]] = {}
     for sub in job.subs:
         key = sub.name.strip().casefold()
         seen_names[key] = seen_names.get(key, 0) + 1
         for c in sub.all_clearances():
             n = _norm_number(c.number)
-            if n and sub.name not in seen_numbers.setdefault(n, []):
-                seen_numbers[n].append(sub.name)
+            if n:
+                seen_numbers.setdefault(n, {})[sub.name] = None
     for key, count in seen_names.items():
         if count > 1:
             name = next(s.name for s in job.subs if s.name.strip().casefold() == key)
@@ -242,20 +332,25 @@ def _check_job(job: Job, out: List[Finding]) -> None:
     for n, names in seen_numbers.items():
         if len(names) > 1:
             out.append(Finding("warn", "clearance_number_shared", job.name,
-                               f"clearance number {n} appears on different subs: {', '.join(names)} "
+                               f"clearance number {n} appears on different subs: {_names(list(names))} "
                                "(copy-paste error, or a sub using someone else's certificate)",
                                job.name, ""))
 
 
 def audit(job: Job, on: Optional[dt.date] = None, horizon: int = 30,
-          valid_days: int = WSIB_DEFAULT_VALID_DAYS) -> List[Finding]:
-    """All compliance findings for one job as of ``on`` (default: today)."""
+          valid_days: int = WSIB_DEFAULT_VALID_DAYS, strict_whole_job: bool = False) -> List[Finding]:
+    """All compliance findings for one job as of ``on`` (default: today).
+
+    ``strict_whole_job`` keeps "clearance expires during the job" an error even when the
+    job is longer than one 90-day clearance could ever cover (default: a warning then).
+    """
     on = on or dt.date.today()
     out: List[Finding] = []
     _check_job(job, out)
     for sub in job.subs:
         x = _Ctx(job, sub, out)
-        _check_clearance(x, on, horizon, valid_days)
+        _check_clearance(x, on, horizon, valid_days, strict_whole_job)
+        _check_payments(x, on, valid_days)
         _check_insurance(x, on, horizon)
         _check_licences(x, on, horizon)
     return out
@@ -265,7 +360,7 @@ _DURING = {"clearance_expires_during_job", "insurance_expires_during_job", "lice
 
 
 def renewals(jobs: List[Job], within: int = 30, on: Optional[dt.date] = None,
-             include_during_job: bool = False) -> List[Finding]:
+             include_during_job: bool = False, strict_whole_job: bool = False) -> List[Finding]:
     """Everything across jobs that needs a renewal touch within ``within`` days.
 
     ``include_during_job`` also lists documents that expire before the job ends
@@ -275,6 +370,8 @@ def renewals(jobs: List[Job], within: int = 30, on: Optional[dt.date] = None,
     on = on or dt.date.today()
     out: List[Finding] = []
     for job in jobs:
-        out.extend(f for f in audit(job, on=on, horizon=within)
-                   if "due" in f.code or "lapsed" in f.code or (include_during_job and f.code in _DURING))
+        found = audit(job, on=on, horizon=within, strict_whole_job=strict_whole_job)
+        out.extend(f for f in found
+                   if "due" in f.code or "lapsed" in f.code or f.code == "clearance_not_valid_at_payment"
+                   or (include_during_job and f.code in _DURING))
     return out

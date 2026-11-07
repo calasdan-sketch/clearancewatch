@@ -2,6 +2,35 @@
 
 ## 0.2.0 (unreleased)
 
+### Round 3 (contract-compliance auditor, insurance broker, project admin, attacker, performance engineer, docs/DX lead, competitor engineer)
+
+Added
+- `--payment-on DATE` (repeatable) and job `payment_dates`: `clearance_not_valid_at_payment` when a planned payment falls after the clearance stops covering it.
+- Insurance endorsements: `requirements.additional_insured` / `waiver_of_subrogation` / `primary_noncontributory` with `insurance_endorsement_missing` (certificate says false) and `insurance_endorsement_unconfirmed` (nothing recorded). Strict true/false only.
+- `requirements.required_licences` (trade -> licence-name text) with `licence_missing`.
+- `clearance_exempt: "reason"` on a sub: an `info` note instead of `clearance_missing`. New severity `info`; it never fails a run, counts as "note(s)", and JSON gets an `info` count. Consumers that assumed only `error`/`warn` should tolerate it.
+- `insurance_limit_ambiguous` when a coverage string lists several amounts and only a non-first one meets the minimum.
+- `--format ics` (all-day events, 14-day reminder, RFC 5545 escaping/folding, stable UIDs); findings gained an optional `due` date (JSON `due`).
+- `--baseline PREV.json` (only new findings), `--active-only`, `--strict-whole-job`, stdin via `-`, `clearancewatch template`, `clearancewatch schema`.
+- Exit code `3` for an internal error (was exit 1, indistinguishable from "findings").
+- Bench: 84 defects / 21 kinds / 30 clean jobs; a defect counts only at the right severity.
+
+Fixed
+- `parse_limit` crashed (`OverflowError`, exit 1 with a traceback) on `1e999`-style or 400-digit amounts, read `-5` as 5, `2 000 000` as 2, `$2.000.000` as 2, `1e6` as 6, and ignored per-occurrence vs aggregate. Now unreadable (a warning) unless unambiguous; amounts above a trillion are refused.
+- A legacy console (`PYTHONIOENCODING=ascii`, old Windows code pages) turned any non-ASCII name into a traceback; output now degrades to `\x..` escapes. `| head` no longer prints a traceback.
+- An absurdly long integer in the jobs file raised a bare `ValueError`; now exit 2.
+- Hostile input: 20,000 subs sharing one clearance number was quadratic and produced a 100 KB finding; now linear and capped ("and N more").
+- Markdown chase list: names like `[text](url)` rendered as links; brackets are now escaped.
+- The 90-day default was applied to gap detection for non-WSIB boards; it no longer is.
+- README: the sample output block did not match the tool (wrong code/wording); the quick start pointed at a PyPI version (0.1.0) that lacks these features; "~130,000 sub audits/s" was not reproducible (measured ~20-45k/s on this machine, which varies). All three corrected; tests now compare the README example and sample output with the tool.
+
+Changed (behaviour)
+- `clearance_expires_during_job` is a warning (not an error) when the job runs longer than one 90-day clearance could cover from the audit date: an unfixable error that blocked CI until the final certificate. `--strict-whole-job` restores the old behaviour. Jobs a single clearance could cover stay errors.
+- Competitor notes refreshed 2026-11-07: mycoitracking.com now redirects to illumend.ai (myCOI's AI product); OpenCOI (AGPL) added.
+
+Speed: per-string caching of issuer, province and limit parsing recovered the cost of the new checks. On the same shared VM the benchmark ran ~31-35k subs/s before this round and ~21-47k after (run-to-run noise is larger than the difference, and the corpus is heavier now); treat it as "tens of thousands per second".
+
+
 Expert deep-dive (construction risk manager, WCB/WSIB compliance specialist, first-time project admin, document-data QA engineer).
 
 ### Added

@@ -17,7 +17,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from corpus import build, clean_job  # noqa: E402
+from corpus import SEVERITY, build, clean_job  # noqa: E402
 
 from clearancewatch import Job, audit  # noqa: E402
 
@@ -43,7 +43,8 @@ def evaluate(cases):
     per = {}
     for c in cases:
         on = dt.date.fromisoformat(c["on"])
-        found = {f.code for f in audit(Job.from_dict(c["job"]), on=on, horizon=HORIZON)}
+        findings = audit(Job.from_dict(c["job"]), on=on, horizon=HORIZON)
+        found = {f.code for f in findings}
         cw_flag = bool(found)
         base_flag = baseline_flags(c["job"], on)
         if c["defect"] is None:
@@ -51,7 +52,7 @@ def evaluate(cases):
             fp["cw"] += cw_flag
             fp["base"] += base_flag
             continue
-        cw_hit = c["defect"] in found or (c["defect"] == "unknown_field" and "unknown_field" in found)
+        cw_hit = any(f.code == c["defect"] and f.severity == SEVERITY[c["defect"]] for f in findings)
         p = per.setdefault(c["defect"], [0, 0, 0])
         p[0] += 1
         p[1] += cw_hit
