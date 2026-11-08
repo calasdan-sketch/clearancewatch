@@ -25,7 +25,7 @@
 
 | Severity | Issue | What to do |
 |---|---|---|
-| warn | work started 2026-02-01 but the earliest clearance on file is dated 2026-02-10; the regulators say to get a clearance before work starts (if an earlier one exists, add it to clearances) | Get the clearance on file now, and add any earlier one to the sub's clearances |
+| warn | work started 2026-02-01 but the earliest clearance on file is dated 2026-02-10; WCB Alberta says to get a clearance before hiring and WCB Manitoba before work commences (if an earlier one exists, add it to clearances) | Get the clearance on file now, and add any earlier one to the sub's clearances |
 | warn | letter covers work up to 2026-02-10; work continues past it (request a fresh clearance at the next installment) | Request a fresh clearance letter before the next payment |
 | warn | planned payment 2026-03-01 is after the clearance on file stops covering it (latest letter is dated 2026-02-10; WCB Manitoba does not state how long a letter stays good, so request a fresh one before paying) | Request a clearance that covers the payment date before releasing payment |
 | warn | status 'deemed worker': WCB Manitoba treats this firm as your worker, so you report the labour portion of its contract in your payroll and report its injuries (you may not deduct that cost from it) | Add the labour portion of this contract to your payroll estimate |

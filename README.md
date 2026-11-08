@@ -15,7 +15,7 @@ Checked against the regulators' own pages on 2026-11-07 (Ontario, Alberta) and 2
 | Manitoba *The Workers Compensation Act* (C.C.S.M. c. W200): the principal must see that the contractor files the required statements (s. 11); a contractor and the person it works for are both liable for the assessment on the work (s. 90(1)); contractor and subcontractor likewise (s. 90(2)); a contractor is the principal as to its subcontractor (s. 89(3)) | [web2.gov.mb.ca w200 (PDF)](https://web2.gov.mb.ca/laws/statutes/ccsm/_pdf.php?cap=w200), consolidation current 1 June to 4 Nov 2026, read 2026-11-08 | verified as read; the tool only paraphrases these sections, it does not interpret them |
 | How long a Manitoba clearance letter stays good | not found on the WCB Manitoba page | **unverified**: a Manitoba letter is treated as dated cover only, like Alberta, and the payment check tells you to request a fresh one |
 | "A WSIB clearance must be valid for the **whole job**" | not found on the pages above | **unverified**: treated as conservative house policy (error severity) |
-| "An Alberta letter covers work only **up to its date**" | not found on the pages above | **unverified**: treated as conservative house policy (warning `clearance_cover_lapsed`) |
+| "An Alberta or Manitoba letter covers work only **up to its date**" | not found on the pages above | **unverified**: treated as conservative house policy (warning `clearance_cover_lapsed`) |
 | Clearance rules for other provinces (BC, SK, QC, ...) | not modelled | the tool says so (`province_not_modelled`) instead of guessing |
 
 > **This is not legal advice.** It's a date-tracking assistant. Read the regulator's current page and confirm obligations with your broker, WSIB/WCB, or counsel before relying on any finding.
@@ -138,7 +138,7 @@ Exit `0` pass, `1` findings at or above `--fail-on` (default: errors), `2` your 
 }
 ```
 
-A Manitoba (or Alberta) clearance is a dated **letter**: give `issued` (and `covered_until` if the letter states one). `status` is what the letter says: `good standing`, `deemed worker` or `deemed/default`. `start` is the day that sub's own work starts: a letter dated after it is flagged (both regulators say to get the clearance before work starts). `supply_only: true` records that the sub only supplies material; the tool only prints a note for you to confirm.
+A Manitoba (or Alberta) clearance is a dated **letter**: give `issued` (and `covered_until` if the letter states one). `status` is what the letter says: `good standing`, `deemed worker` or `deemed/default`. `start` is the day that sub's own work starts: a letter dated after it is flagged (WCB Alberta says clearance before hiring, WCB Manitoba before work commences). `supply_only: true` records that the sub only supplies material; the tool only prints a note for you to confirm.
 
 ### Optional fields (all new in 0.2.0)
 
@@ -191,7 +191,7 @@ Names and issuers come from emails and PDFs. Terminal escapes, bidi/zero-width c
 | What it is | free local CLI/library, one JSON file, MIT | commercial platforms (TrustLayer's own site says "Pricing varies depending on platform usage", read 2026-11-07; other prices unverified) |
 | Data leaves your machine | no | unverified; hosted products by design |
 | Sub self-service portal, document upload, COI parsing | **no** | advertised by vendors (unverified) |
-| WSIB / WCB Alberta date rules with sources | yes, see table above | unverified |
+| WSIB / WCB Alberta / WCB Manitoba date rules with sources | yes, see table above | unverified |
 | Reads the certificate itself (OCR/PDF) | **no**, you type the dates | TrustLayer: "reads each COI, checks it against your standards" ([trustlayer.io](https://www.trustlayer.io/)); myCOI's current product: reviews COIs and endorsements incl. additional insured, waiver of subrogation, primary and non-contributory, per-project aggregates ([illumend.ai](https://www.illumend.ai/)); not tested |
 | Endorsements (additional insured, waiver, primary/non-contributory) | you type true/false from the certificate; flagged if missing | vendors say they check them automatically (above, unverified) |
 | Calendar export | `.ics`, local | unverified |
@@ -222,7 +222,7 @@ Honest caveat: I wrote both the corpus and the checks, so 100/100 shows the chec
 - Payment-date checks compare your dates with the dates you typed. WCB Alberta's page (read 2026-11-07) and WCB Manitoba's page (read 2026-11-08) do not say how long a letter stays valid, so for an Alberta or Manitoba letter the tool only checks the letter is dated on or after the payment and says so.
 - `--baseline` matches findings on exact text, so use the same `--within` and the same command for both runs.
 - `--format ics` only has events for findings that carry a date (expiries); `renewals` needs `--include-during-job` to include documents that expire before the job ends.
-- "Whole job" and "Alberta letter date" rules are house policy (see the verification table); tune severity with `--fail-on`. WSIB's page says a clearance is valid up to 90 days and does not say whether it must cover a whole job.
+- "Whole job" and "Alberta/Manitoba letter date" rules are house policy (see the verification table); tune severity with `--fail-on`. WSIB's page says a clearance is valid up to 90 days and does not say whether it must cover a whole job.
 - Insurance limits are the per-occurrence amount if the text labels one, else the first amount found in free text (`C$2M`, `$2,000,000`, `2 million`); amounts next to *deductible*, *retention* or *SIR* are ignored; a small bare number such as the `1` in `1/2M` makes the text unreadable (flagged, not guessed); umbrella/excess layers are never added up (`insurance_limit_includes_umbrella` asks you to check the contract); `US$`/other currencies are flagged, not converted. Additional-insured and waiver-of-subrogation wording are not checked.
 
 ## License

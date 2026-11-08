@@ -192,7 +192,7 @@ def _check_status(x: _Ctx, c: Clearance) -> None:
 
 
 def _check_started_before_clearance(x: _Ctx, certs: List[Clearance], prov: str) -> None:
-    """WCB Alberta and WCB Manitoba both say to get the clearance before work starts."""
+    """WCB Alberta says clearance before hiring; WCB Manitoba says before work commences."""
     start = x.sub.start
     if start is None or not (prov in _LETTER_PROVINCES or any(_is_letter(c, prov) for c in certs)):
         return
@@ -200,8 +200,8 @@ def _check_started_before_clearance(x: _Ctx, certs: List[Clearance], prov: str) 
     if dated and min(dated) > start:
         x.add("warn", "clearance_after_work_started",
               f"work started {start.isoformat()} but the earliest clearance on file is dated {min(dated).isoformat()}; "
-              "the regulators say to get a clearance before work starts (if an earlier one exists, add it to "
-              "clearances)")
+              "WCB Alberta says to get a clearance before hiring and WCB Manitoba before work commences (if an "
+              "earlier one exists, add it to clearances)")
 
 
 def _check_clearance(x: _Ctx, on: dt.date, horizon: int, valid_days: int, strict_whole_job: bool = False) -> None:

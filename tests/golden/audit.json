@@ -93,7 +93,7 @@
       "severity": "warn",
       "code": "clearance_after_work_started",
       "subject": "Winnipeg infill / Prairie Framing",
-      "detail": "work started 2026-02-01 but the earliest clearance on file is dated 2026-02-10; the regulators say to get a clearance before work starts (if an earlier one exists, add it to clearances)",
+      "detail": "work started 2026-02-01 but the earliest clearance on file is dated 2026-02-10; WCB Alberta says to get a clearance before hiring and WCB Manitoba before work commences (if an earlier one exists, add it to clearances)",
       "job": "Winnipeg infill",
       "sub": "Prairie Framing"
     },

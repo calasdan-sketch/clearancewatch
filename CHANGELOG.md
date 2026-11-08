@@ -7,7 +7,7 @@
 Added
 - **Manitoba (WCB)**: `province: "MB"` and issuers such as `WCB Manitoba` / `WCB-MB` are now modelled as dated letters (like Alberta): cover-lapsed, payment-date and issuer-mismatch checks apply. A bare `WCB` or blank issuer on an Alberta/Manitoba job with no stated expiry is read as that province's letter (it used to give `clearance_no_expiry`). Rules and sources are in the README table; letter validity is stated as unverified.
 - `clearance.status` (`good standing`, `deemed worker`, `deemed/default`): `clearance_status_not_good` (error), `clearance_status_deemed_worker` and `clearance_status_unrecognised` (warn).
-- `sub.supply_only: true` (note `clearance_supply_only`, never fails a run) and `sub.start` (`clearance_after_work_started`, Alberta and Manitoba only: both regulators say to get the clearance before work starts).
+- `sub.supply_only: true` (note `clearance_supply_only`, never fails a run) and `sub.start` (`clearance_after_work_started`, Alberta and Manitoba only: WCB Alberta says clearance before hiring, WCB Manitoba before work commences).
 - `clearancewatch import-csv subs.csv -o jobs.json`: spreadsheet export (UTF-8 or Excel UTF-16) to a jobs file, strict, with row numbers in errors.
 - `clearancewatch about` (author, licence). `--version` is unchanged.
 - `insurance_limit_includes_umbrella` (warn): primary limit under the minimum but the text mentions umbrella/excess. Layers are never added up.

@@ -1,8 +1,8 @@
 """clearancewatch — per-job subcontractor compliance: clearances, insurance, licences.
 
-Not legal advice. Two rules are checked against the regulators' own pages (see
-README): WSIB clearances are valid up to 90 days, and WCB Alberta wants a
-clearance before hiring and before releasing payment. "Valid for the whole job"
+Not legal advice. These rules are checked against the regulators' own pages (see
+README): WSIB clearances are valid up to 90 days; WCB Alberta and WCB Manitoba
+want a clearance before work starts / hiring and before releasing payment. "Valid for the whole job"
 and "an Alberta letter covers work only up to its date" are conservative house
 policy, not quoted law.
 """
