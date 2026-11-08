@@ -122,6 +122,8 @@ def test_alberta_payment_message_still_says_alberta():
     ("Deemed / Defaulted", "clearance_status_not_good", "error"),
     ("not in good standing", "clearance_status_not_good", "error"),
     ("NOT in good standing", "clearance_status_not_good", "error"),
+    ("no good standing", "clearance_status_not_good", "error"),
+    ("not compliant", "clearance_status_unrecognised", "warn"),
     ("pending", "clearance_status_unrecognised", "warn"),
 ])
 def test_manitoba_status_words(status, code, sev):
@@ -131,7 +133,7 @@ def test_manitoba_status_words(status, code, sev):
     assert len(hit) == 1 and hit[0].severity == sev
 
 
-@pytest.mark.parametrize("status", ["good standing", "In Good Standing", ""])
+@pytest.mark.parametrize("status", ["good standing", "In Good Standing", "", "In good standing (no issues)"])
 def test_good_standing_or_no_status_adds_nothing(status):
     j = mb_job({"name": "S", "clearance": {"issuer": "WCB Manitoba", "issued": "2026-05-20", "status": status,
                                            "covered_until": "2026-08-31"}, "insurance": ins()})

@@ -92,7 +92,7 @@ def _status_kind(status: str) -> str:
     n = re.sub(r"[^a-z]+", " ", (status or "").lower()).strip()
     if not n:
         return ""
-    if "default" in n or re.search(r"\b(not|no|without)\b", n):
+    if "default" in n or re.search(r"\b(not|no|without|lost)\s+(?:in\s+|a\s+|its\s+)?good\b", n):
         return "not_good"
     if "deemed" in n:
         return "deemed_worker"
