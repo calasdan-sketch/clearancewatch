@@ -316,7 +316,7 @@ def _check_payments(x: _Ctx, on: dt.date, valid_days: int) -> None:
 
 def _check_insurance(x: _Ctx, on: dt.date, horizon: int) -> None:
     job, ins = x.job, x.sub.insurance
-    if ins is None or not (ins.provider or ins.policy):
+    if ins is None or not (ins.provider or ins.policy or ins.coverage or ins.expires):
         x.add("error", "insurance_missing", "no insurance on file")
         return
     minimum = job.requirements.min_liability

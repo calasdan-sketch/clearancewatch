@@ -380,3 +380,11 @@ def test_csv_job_fields_can_come_from_a_later_row_when_the_first_left_them_blank
     assert jobs[0]["province"] == "MB" and jobs[0]["requirements"]["min_liability"] == "C$2M"
     with pytest.raises(Exception, match="differs"):
         rows_to_jobs("job,sub,min_liability\nJ,A,C$1M\nJ,B,C$2M\n")
+
+
+def test_insurance_with_only_a_limit_and_expiry_is_not_called_missing():
+    only = {"coverage": "C$2M", "expires": "2027-01-01"}
+    j = Job.from_dict({"name": "J", "subs": [{"name": "S", "insurance": only}]})
+    assert "insurance_missing" not in codes(audit(j, on=ON))
+    j2 = Job.from_dict({"name": "J", "subs": [{"name": "S", "insurance": {"provider": ""}}]})
+    assert "insurance_missing" in codes(audit(j2, on=ON))

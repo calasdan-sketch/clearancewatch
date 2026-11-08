@@ -18,6 +18,8 @@ Fixed
 - Deductibles and retentions in the coverage text (`$5,000 deductible, C$2M`) were read as the limit and gave a false `insurance_below_minimum`; they are now skipped. A small bare number such as the `1` in `1/2M` is flagged unreadable instead of being taken as C$1.
 - `clearance_number_shared` listed the subs in file order, so reordering subs changed the text and `--baseline` saw the finding as new; names are now sorted.
 - A clearancewatch 0.1.0 `--json` report (no `job`/`sub` keys) was refused as a `--baseline`; it is now accepted.
+- A sub whose insurance had a limit and expiry but no provider or policy number was reported as `insurance_missing` ("no insurance on file"); now only an insurance entry with nothing at all is missing. Found when a spreadsheet row with no policy column was imported.
+- `duplicate_sub` / `duplicate_job` named the first spelling in file order; they now name the same spelling whatever the order (so `--baseline` keys do not move).
 - Mutation check: no test sat exactly on an expiry day, so flipping `<` to `<=` went unnoticed; boundary tests now pin every expiry kind.
 
 ### Round 4 (first-hour user, release engineer, supply-chain reviewer, docs/DX writer, CI integrator, hostile-input fuzzer, performance engineer, competitor maintainer; see docs/ROUND4.md)
