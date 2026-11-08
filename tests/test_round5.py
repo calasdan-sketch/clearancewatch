@@ -23,7 +23,7 @@ def codes(findings, severity=None):
 
 
 def mb_job(sub, **job):
-    base = {"name": "Winnipeg infill", "province": "MB", "start": "2026-05-01", "end": "2026-08-31", "subs": [sub]}
+    base = {"name": "Prairie infill", "province": "MB", "start": "2026-05-01", "end": "2026-08-31", "subs": [sub]}
     base.update(job)
     return Job.from_dict(base)
 
@@ -243,10 +243,10 @@ def test_mentions_excess_is_whole_word():
 CSV = (
     "Job,Province,Start,End,Sub,Trade,Clearance issuer,Clearance number,Clearance issued,Clearance covered until,"
     "Insurance coverage,Insurance expires,Licence name,Licence expires\n"
-    "Winnipeg infill,MB,2026-05-01,2026-08-31,Prairie Framing,framing,WCB Manitoba,77,2026-05-20,2026-08-31,"
+    "Prairie infill,MB,2026-05-01,2026-08-31,Prairie Framing,framing,WCB Manitoba,77,2026-05-20,2026-08-31,"
     "C$2M,2027-06-01,,\n"
-    "Winnipeg infill,,,,Prairie Framing,,,,,,,,Fall protection,2027-01-01\n"
-    "Winnipeg infill,,,,Red River Electric,electrical,WCB Manitoba,78,2026-05-21,2026-08-31,"
+    "Prairie infill,,,,Prairie Framing,,,,,,,,Fall protection,2027-01-01\n"
+    "Prairie infill,,,,Red River Electric,electrical,WCB Manitoba,78,2026-05-21,2026-08-31,"
     "C$2M,2027-06-01,Electrician,2027-01-01\n"
     "Second job,ON,2026-06-01,2026-07-01,Bob's Drywall,drywall,WSIB,1,2026-05-20,,C$2M,2027-06-01,,\n"
 )
@@ -257,7 +257,7 @@ def test_import_csv_round_trips_into_a_clean_audit(tmp_path, capsys):
     src.write_text(CSV, encoding="utf-8")
     assert main(["import-csv", str(src), "-o", str(out)]) == 0
     jobs = json.loads(out.read_text(encoding="utf-8"))
-    assert [j["name"] for j in jobs] == ["Winnipeg infill", "Second job"]
+    assert [j["name"] for j in jobs] == ["Prairie infill", "Second job"]
     assert [s["name"] for s in jobs[0]["subs"]] == ["Prairie Framing", "Red River Electric"]
     assert jobs[0]["subs"][0]["licences"] == [{"name": "Fall protection", "expires": "2027-01-01"}]
     assert "read 4 row(s) into 2 job(s)" in capsys.readouterr().err
@@ -269,7 +269,7 @@ def test_import_csv_accepts_excel_unicode_text_and_utf8_bom(tmp_path, capsys):
         src = tmp_path / "s.csv"
         src.write_bytes(CSV.encode(enc))
         assert main(["import-csv", str(src)]) == 0
-        assert json.loads(capsys.readouterr().out)[0]["name"] == "Winnipeg infill"
+        assert json.loads(capsys.readouterr().out)[0]["name"] == "Prairie infill"
 
 
 @pytest.mark.parametrize("body,needle", [

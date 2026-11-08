@@ -21,7 +21,7 @@
 | error | trade 'electrical' needs a licence matching 'electrician'; none on file | Request a copy of the required licence |
 | warn | cannot check the C$2,000,000 minimum: coverage '1/2M' is unreadable (the small number 1 is not a dollar amount; shorthand such as 1/2M is ambiguous) | Enter the limit as a number, e.g. 2000000 |
 
-## Winnipeg infill / Prairie Framing
+## Prairie infill / Prairie Framing
 
 | Severity | Issue | What to do |
 |---|---|---|
@@ -30,13 +30,13 @@
 | warn | planned payment 2026-03-01 is after the clearance on file stops covering it (latest letter is dated 2026-02-10; WCB Manitoba does not state how long a letter stays good, so request a fresh one before paying) | Request a clearance that covers the payment date before releasing payment |
 | warn | status 'deemed worker': WCB Manitoba treats this firm as your worker, so you report the labour portion of its contract in your payroll and report its injuries (you may not deduct that cost from it) | Add the labour portion of this contract to your payroll estimate |
 
-## Winnipeg infill / Lumber Yard
+## Prairie infill / Lumber Yard
 
 | Severity | Issue | What to do |
 |---|---|---|
 | info | recorded as supplying material only. WCB Manitoba says clearance letters are not required for those firms; confirm that is true for this sub and province before relying on it | Confirm the sub only supplies material, and keep the confirmation on file |
 
-## Winnipeg infill / Red River =Electric
+## Prairie infill / Red River =Electric
 
 | Severity | Issue | What to do |
 |---|---|---|

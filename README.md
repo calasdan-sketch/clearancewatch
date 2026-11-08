@@ -129,7 +129,7 @@ Exit `0` pass, `1` findings at or above `--fail-on` (default: errors), `2` your 
 
 ```json
 {
-  "name": "Winnipeg infill", "province": "MB",
+  "name": "Prairie infill", "province": "MB",
   "subs": [
     { "name": "Prairie Framing", "start": "2026-05-01",
       "clearance": { "issuer": "WCB Manitoba", "number": "77", "issued": "2026-05-20", "status": "good standing" } },

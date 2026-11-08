@@ -1,7 +1,7 @@
-WARN  clearance_cover_lapsed       Winnipeg infill / Prairie Framing: letter covers work up to 2026-02-10; work continues past it (request a fresh clearance at the next installment)
-WARN  clearance_not_valid_at_payment Winnipeg infill / Prairie Framing: planned payment 2026-03-01 is after the clearance on file stops covering it (latest letter is dated 2026-02-10; WCB Manitoba does not state how long a letter stays good, so request a fresh one before paying)
-WARN  clearance_cover_lapsed       Winnipeg infill / Red River =Electric: letter covers work up to 2026-02-12; work continues past it (request a fresh clearance at the next installment)
-WARN  clearance_not_valid_at_payment Winnipeg infill / Red River =Electric: planned payment 2026-03-01 is after the clearance on file stops covering it (latest letter is dated 2026-02-12; WCB Manitoba does not state how long a letter stays good, so request a fresh one before paying)
+WARN  clearance_cover_lapsed       Prairie infill / Prairie Framing: letter covers work up to 2026-02-10; work continues past it (request a fresh clearance at the next installment)
+WARN  clearance_not_valid_at_payment Prairie infill / Prairie Framing: planned payment 2026-03-01 is after the clearance on file stops covering it (latest letter is dated 2026-02-10; WCB Manitoba does not state how long a letter stays good, so request a fresh one before paying)
+WARN  clearance_cover_lapsed       Prairie infill / Red River =Electric: letter covers work up to 2026-02-12; work continues past it (request a fresh clearance at the next installment)
+WARN  clearance_not_valid_at_payment Prairie infill / Red River =Electric: planned payment 2026-03-01 is after the clearance on file stops covering it (latest letter is dated 2026-02-12; WCB Manitoba does not state how long a letter stays good, so request a fresh one before paying)
 WARN  clearance_cover_lapsed       Calgary shell / North Roofing: letter covers work up to 2026-01-05; work continues past it (request a fresh clearance at the next installment)
 
 0 error(s), 5 warning(s) — PASS
