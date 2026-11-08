@@ -405,7 +405,7 @@ def _check_job(job: Job, out: List[Finding]) -> None:
                 seen_numbers.setdefault(n, {})[sub.name] = None
     for key, count in seen_names.items():
         if count > 1:
-            name = next(s.name for s in job.subs if s.name.strip().casefold() == key)
+            name = min(s.name for s in job.subs if s.name.strip().casefold() == key)  # same spelling whatever the order
             out.append(Finding("warn", "duplicate_sub", f"{job.name} / {name}",
                                f"{count} subs share this name; one may be a duplicate entry",
                                job.name, name))
@@ -425,7 +425,7 @@ def check_jobs(jobs: List[Job]) -> List[Finding]:
     out: List[Finding] = []
     for key, n in counts.items():
         if n > 1:
-            name = next(j.name for j in jobs if j.name.strip().casefold() == key)
+            name = min(j.name for j in jobs if j.name.strip().casefold() == key)  # same spelling whatever the order
             out.append(Finding("warn", "duplicate_job", name, f"{n} jobs share this name, so findings and --baseline "
                                "cannot tell them apart", name, ""))
     return out

@@ -68,7 +68,7 @@ ACTIONS = {
     "clearance_after_work_started": "Get the clearance on file now, and add any earlier one to the sub's clearances",
     "clearance_status_deemed_worker": "Add the labour portion of this contract to your payroll estimate",
     "clearance_status_not_good": "Ask the sub to resolve its standing with the board before releasing payment",
-    "clearance_status_unrecognised": "Read the letter; record its status (good standing, deemed worker, deemed/default)",
+    "clearance_status_unrecognised": "Record the letter's status: good standing, deemed worker or deemed/default",
     "clearance_supply_only": "Confirm the sub only supplies material, and keep the confirmation on file",
 }
 _RANK = {"error": 0, "warn": 1, "info": 2}
@@ -379,7 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
     ic = sub.add_parser("import-csv", help="turn a spreadsheet export (one row per sub) into a jobs file")
     ic.add_argument("csv", help="CSV file; - reads stdin (see the README for the column names)")
     ic.add_argument("-o", "--output", metavar="FILE", help="write the jobs file to FILE (UTF-8) instead of the screen")
-    sub.add_parser("about", help="who makes this, the licence, and where to read the source")
+    sub.add_parser("about", help="who makes this and under which licence")
 
     for name, helptext in (("template", "print a starter jobs.json to edit"),
                            ("schema", "print a JSON Schema for the jobs file (for editor validation)")):
@@ -388,8 +388,7 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-ABOUT = (f"clearancewatch {__version__}\n{__copyright__}\nLicence: MIT. Not legal advice.\n"
-         "Source: https://github.com/calasdan-sketch/clearancewatch")
+ABOUT = f"clearancewatch {__version__}\n{__copyright__}\nLicence: MIT. Not legal advice."
 
 
 def _import_csv(args) -> int:

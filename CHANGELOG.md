@@ -2,6 +2,24 @@
 
 ## 0.2.0 (unreleased)
 
+### Round 5 (construction risk manager, commercial insurance broker, compliance clerk, Manitoba WCB specialist, QA/test-methodology, upgrade-path tester; see docs/ROUND5.md)
+
+Added
+- **Manitoba (WCB)**: `province: "MB"` and issuers such as `WCB Manitoba` / `WCB-MB` are now modelled as dated letters (like Alberta): cover-lapsed, payment-date and issuer-mismatch checks apply. A bare `WCB` or blank issuer on an Alberta/Manitoba job with no stated expiry is read as that province's letter (it used to give `clearance_no_expiry`). Rules and sources are in the README table; letter validity is stated as unverified.
+- `clearance.status` (`good standing`, `deemed worker`, `deemed/default`): `clearance_status_not_good` (error), `clearance_status_deemed_worker` and `clearance_status_unrecognised` (warn).
+- `sub.supply_only: true` (note `clearance_supply_only`, never fails a run) and `sub.start` (`clearance_after_work_started`, Alberta and Manitoba only: both regulators say to get the clearance before work starts).
+- `clearancewatch import-csv subs.csv -o jobs.json`: spreadsheet export (UTF-8 or Excel UTF-16) to a jobs file, strict, with row numbers in errors.
+- `clearancewatch about` (author, licence). `--version` is unchanged.
+- `insurance_limit_includes_umbrella` (warn): primary limit under the minimum but the text mentions umbrella/excess. Layers are never added up.
+- `bench/mutate.py` (mutation sanity check), golden files for every output format (`tests/golden/`), property tests (`tests/test_properties.py`, hypothesis if installed, seeded otherwise), exact-day boundary tests against an oracle (`tests/test_boundaries.py`).
+
+Fixed
+- Author line: `LICENSE` said `calasdan-sketch`; it is now `Copyright (c) 2026 Calas Automations Inc.` everywhere. Added `maintainers` and `__author__`; the `.ics` product id names Calas Automations Inc.
+- Deductibles and retentions in the coverage text (`$5,000 deductible, C$2M`) were read as the limit and gave a false `insurance_below_minimum`; they are now skipped. A small bare number such as the `1` in `1/2M` is flagged unreadable instead of being taken as C$1.
+- `clearance_number_shared` listed the subs in file order, so reordering subs changed the text and `--baseline` saw the finding as new; names are now sorted.
+- A clearancewatch 0.1.0 `--json` report (no `job`/`sub` keys) was refused as a `--baseline`; it is now accepted.
+- Mutation check: no test sat exactly on an expiry day, so flipping `<` to `<=` went unnoticed; boundary tests now pin every expiry kind.
+
 ### Round 4 (first-hour user, release engineer, supply-chain reviewer, docs/DX writer, CI integrator, hostile-input fuzzer, performance engineer, competitor maintainer; see docs/ROUND4.md)
 
 Fixed

@@ -30,7 +30,10 @@ def clean_job(rng, i):
             "name": f"Sub {i}", "trade": "electrical",
             "clearance": {"issuer": "WSIB", "number": f"{1000000 + i}", "issued": iso(issued),
                           "expires": iso(issued + dt.timedelta(days=90))},
-            "insurance": {"provider": "Aviva", "policy": f"P-{i}", "coverage": "C$2M per occurrence, C$4M aggregate",
+            "insurance": {"provider": "Aviva", "policy": f"P-{i}",
+                          # every fourth job carries a deductible in the text: it must never be read as the limit
+                          "coverage": ("C$2M per occurrence, $5,000 deductible" if i % 4 == 2
+                                       else "C$2M per occurrence, C$4M aggregate"),
                           "additional_insured": True,
                           "expires": iso(end + dt.timedelta(days=rng.randint(60, 300)))},
             "licences": [{"name": "Trade licence", "expires": iso(end + dt.timedelta(days=rng.randint(60, 300)))}],
@@ -45,6 +48,31 @@ def clean_job(rng, i):
             j["subs"].append(other)
         # no end date: insurance/licence cannot run out "during the job"
     return j
+
+
+def clean_mb_job(rng, i):
+    """A clean Manitoba job: dated WCB Manitoba letters that cover the whole job and predate the work."""
+    j = clean_job(rng, i)
+    j["province"] = "MB"
+    j["end"] = j["end"] or iso(ON + dt.timedelta(days=60))
+    for k, s in enumerate(j["subs"]):
+        issued = ON - dt.timedelta(days=rng.randint(1, 10))
+        s["clearance"] = {"issuer": "WCB Manitoba", "number": f"MB-{i}-{k}", "issued": iso(issued),
+                          "covered_until": j["end"], "status": "good standing"}
+        s["start"] = iso(issued)
+    return j
+
+
+def _mb(j):
+    """Turn a clean job into a clean Manitoba one (in place) and return its first sub."""
+    s = j["subs"][0]
+    j["province"] = "MB"
+    j["end"] = j["end"] or iso(ON + dt.timedelta(days=60))
+    issued = ON - dt.timedelta(days=5)
+    s["clearance"] = {"issuer": "WCB Manitoba", "number": "MB-1", "issued": iso(issued),
+                      "covered_until": j["end"], "status": "good standing"}
+    s["start"] = iso(issued)
+    return s
 
 
 def _mutate(kind, j, rng):
@@ -102,6 +130,15 @@ def _mutate(kind, j, rng):
         j["payment_dates"] = [iso(ON + dt.timedelta(days=rng.randint(100, 200)))]
     elif kind == "insurance_limit_ambiguous":
         s["insurance"]["coverage"] = rng.choice(["C$1M / C$2M aggregate", "$1,000,000 + $5M umbrella"])
+    elif kind == "clearance_status_not_good":
+        _mb(j)["clearance"]["status"] = rng.choice(["deemed/default", "Deemed / Defaulted", "not in good standing"])
+    elif kind == "clearance_status_deemed_worker":
+        _mb(j)["clearance"]["status"] = rng.choice(["deemed worker", "Deemed Worker"])
+    elif kind == "clearance_after_work_started":
+        s = _mb(j)
+        s["start"] = iso(ON - dt.timedelta(days=rng.randint(10, 30)))
+    elif kind == "insurance_limit_includes_umbrella":
+        s["insurance"]["coverage"] = rng.choice(["C$1M + C$1M umbrella", "C$1M primary, C$500,000 excess"])
     elif kind == "clearance_gap":
         j["end"] = iso(ON + dt.timedelta(days=60))
         a_iss = ON - dt.timedelta(days=100)
@@ -121,6 +158,8 @@ DEFECTS = [
     "licence_expired", "clearance_no_expiry", "unknown_field", "clearance_number_shared", "clearance_gap",
     "insurance_endorsement_missing", "licence_missing", "clearance_not_valid_at_payment",
     "insurance_limit_ambiguous", "insurance_endorsement_unconfirmed",
+    "clearance_status_not_good", "clearance_status_deemed_worker", "clearance_after_work_started",
+    "insurance_limit_includes_umbrella",
 ]
 # The severity each planted defect must be reported at (a defect found at the wrong severity is a miss).
 SEVERITY = {
@@ -133,9 +172,12 @@ SEVERITY = {
     "clearance_number_shared": "warn", "clearance_gap": "warn", "insurance_endorsement_missing": "error",
     "licence_missing": "error", "clearance_not_valid_at_payment": "warn", "insurance_limit_ambiguous": "warn",
     "insurance_endorsement_unconfirmed": "warn",
+    "clearance_status_not_good": "error", "clearance_status_deemed_worker": "warn",
+    "clearance_after_work_started": "warn", "insurance_limit_includes_umbrella": "warn",
 }
 PER_DEFECT = 4
 CLEAN = 30
+CLEAN_MB = 6
 
 
 def build(seed=20261107):
@@ -150,5 +192,8 @@ def build(seed=20261107):
             n += 1
     for _ in range(CLEAN):
         cases.append({"id": n, "defect": None, "job": clean_job(rng, n), "on": iso(ON)})
+        n += 1
+    for _ in range(CLEAN_MB):
+        cases.append({"id": n, "defect": None, "job": clean_mb_job(rng, n), "on": iso(ON)})
         n += 1
     return cases

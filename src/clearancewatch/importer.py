@@ -97,7 +97,12 @@ def rows_to_jobs(text: str) -> Tuple[List[Dict[str, Any]], int]:
             jobs[jname] = job
         else:
             for k in ("province", "start", "end", "min_liability"):
-                if r.get(k) and r[k] != (job.get(k) if k != "min_liability" else job.get("requirements", {}).get(k)):
+                if not r.get(k):
+                    continue
+                holder = job.setdefault("requirements", {}) if k == "min_liability" else job
+                if k not in holder:       # an earlier row left it blank: take it from this row
+                    holder[k] = r[k]
+                elif holder[k] != r[k]:
                     raise ImportError_(f"row {n}: {k} {r[k]!r} differs from the earlier row for job {jname!r}")
         key = (jname, sname)
         clr = {k[len("clearance_"):]: r[k] for k in _CLR if r.get(k)}

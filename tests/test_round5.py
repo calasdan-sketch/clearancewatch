@@ -345,3 +345,36 @@ def test_every_new_code_has_an_action_and_is_documented():
 def test_readme_names_the_manitoba_sources_and_date():
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
     assert "wcb.mb.ca/clearances" in readme and "W200" in readme and re.search(r"2026-11-0\d", readme)
+
+
+# ---- found by the second mutation pass -------------------------------------------------------------------
+
+def test_a_wsib_certificate_on_an_alberta_job_is_still_a_wsib_certificate():
+    j = Job.from_dict({"name": "J", "province": "AB", "end": "2026-08-31", "subs": [
+        {"name": "S", "clearance": {"issuer": "WSIB", "issued": "2026-01-01"}, "insurance": ins()}]})
+    got = codes(audit(j, on=ON))
+    assert "issuer_mismatch" in got and "clearance_expired" in got      # issued + 90 days, not a letter
+
+
+@pytest.mark.parametrize("how_many,tail", [(5, "A, B, C, D, E "), (6, "A, B, C, D, E and 1 more")])
+def test_shared_number_lists_sorted_names_and_caps_at_five(how_many, tail):
+    names = ["F", "E", "D", "C", "B", "A"][-how_many:]
+    j = Job.from_dict({"name": "J", "subs": [
+        {"name": n, "clearance": {"issuer": "WSIB", "number": "9", "issued": "2026-05-20"}} for n in names]})
+    msg = [f.detail for f in audit(j, on=ON) if f.code == "clearance_number_shared"][0]
+    assert tail in msg and "and 0 more" not in msg
+
+
+def test_duplicate_names_are_reported_the_same_way_whatever_the_order():
+    a = Job.from_dict({"name": "J", "subs": [{"name": "Bob"}, {"name": "BOB"}]})
+    b = Job.from_dict({"name": "J", "subs": [{"name": "BOB"}, {"name": "Bob"}]})
+    dup = lambda job: [f for f in audit(job, on=ON) if f.code == "duplicate_sub"]  # noqa: E731
+    assert dup(a) == dup(b) and len(dup(a)) == 1
+
+
+def test_csv_job_fields_can_come_from_a_later_row_when_the_first_left_them_blank(tmp_path):
+    from clearancewatch.importer import rows_to_jobs
+    jobs, _ = rows_to_jobs("job,sub,province,min_liability\nJ,A,,\nJ,B,MB,C$2M\n")
+    assert jobs[0]["province"] == "MB" and jobs[0]["requirements"]["min_liability"] == "C$2M"
+    with pytest.raises(Exception, match="differs"):
+        rows_to_jobs("job,sub,min_liability\nJ,A,C$1M\nJ,B,C$2M\n")

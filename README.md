@@ -76,7 +76,7 @@ clearancewatch schema > jobs.schema.json          # JSON Schema for editor valid
 clearancewatch audit jobs.json --fail-on warn     # also fail CI on warnings (or: never)
 clearancewatch renewals jobs.json --include-during-job
 clearancewatch import-csv subs.csv -o jobs.json   # spreadsheet export, one row per sub, to a jobs file
-clearancewatch about                              # who makes it, licence, source
+clearancewatch about                              # who makes it, licence
 ```
 
 Example output if Bob's clearance `expires` were `2026-03-15` and the insurance `2026-03-05` (the file above passes clean):
@@ -200,17 +200,19 @@ Vendor home pages read on 2026-11-07: [avetta.com](https://www.avetta.com/) (sup
 
 ## Benchmark (re-runnable)
 
-`python bench/run.py` plants one defect in each of 84 otherwise-clean jobs (21 kinds x 4, fixed seed) plus 30 clean jobs (some ongoing, some with three subs), and compares clearancewatch with a stand-in for a spreadsheet date column (flags only explicit expiry dates already past or within 30 days). A planted defect only counts as caught if the right code is reported **at the right severity**.
+`python bench/run.py` plants one defect in each of 100 otherwise-clean jobs (25 kinds x 4, fixed seed) plus 36 clean jobs (some ongoing, some with three subs, some with a deductible in the coverage text, 6 Manitoba), and compares clearancewatch with a stand-in for a spreadsheet date column (flags only explicit expiry dates already past or within 30 days).
 
 | | clearancewatch | date-column stand-in |
 |---|---|---|
-| planted defects caught | 84/84 | 20/84 (24%) |
-| false alarms on 30 clean jobs | 0 | 0 |
-| speed | roughly 17,000-45,000 sub audits/s on a shared cloud VM, one core (varies run to run; yours will differ) | n/a |
+| planted defects caught (at the right severity) | 100/100 | 20/100 (20%) |
+| false alarms on 36 clean jobs | 0 | 0 |
+| speed | about 105,000-120,000 sub audits/s on one core of a quiet shared cloud VM; Round 4 measured 17,000-45,000 on a busy one, so treat it as "varies 5x with VM load" | n/a |
 
-History: round 2 measured 64/64 on 16 kinds; the corpus now has 5 more kinds (endorsements, required licence, payment date, ambiguous limit) and a stricter caught-at-right-severity rule. An earlier README said "~130,000 sub audits/s"; that figure was not reproducible and has been removed.
+Round 5 compared the previous commit and this one back to back on the same quiet VM (3 runs each): about 117,000 vs 107,000 sub audits/s, so the new checks cost roughly 8%.
 
-Honest caveat: I wrote both the corpus and the checks, so 84/84 shows the checks do what they claim and guards against regressions. It does not predict accuracy on your real documents, and the stand-in is not any commercial product.
+History: round 2 measured 64/64 on 16 kinds; round 4 84/84 on 21 kinds; round 5 added 4 kinds (Manitoba status x2, work started before the clearance, umbrella text) and the clean jobs with deductibles and Manitoba letters (the first version of the Manitoba clean jobs found a bug in the corpus itself: extra subs kept Ontario certificates). An earlier README said "~130,000 sub audits/s"; that figure was not reproducible and was removed.
+
+Honest caveat: I wrote both the corpus and the checks, so 100/100 shows the checks do what they claim and guards against regressions. It does not predict accuracy on your real documents, and the stand-in is not any commercial product. Separate from the benchmark, `python bench/mutate.py` breaks the checks one condition at a time and counts how many of those breakages the tests notice (Round 5: 63% before the new boundary/golden/property tests, 98% after).
 
 ## Limits
 
