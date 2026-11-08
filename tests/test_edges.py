@@ -202,3 +202,13 @@ def test_bare_numbers_below_a_thousand_are_not_dollar_amounts_but_a_thousand_is(
     assert parse_limits("1000") == ([(1000, False)], "")
     assert parse_limits("999")[0] == []
     assert parse_limits("$999") == ([(999, False)], "")
+
+
+def test_no_issuer_on_an_ontario_job_gets_the_ninety_day_rule_but_a_bare_wcb_does_not():
+    blank = one([{"name": "S", "clearance": {"issued": day(-100), "number": "1"}, "insurance": INS}])
+    assert "clearance_expired" in codes(audit(blank, on=ON))
+    no_province = one([{"name": "S", "clearance": {"issued": day(-100), "number": "1"}, "insurance": INS}], province="")
+    assert "clearance_expired" in codes(audit(no_province, on=ON))
+    bare = one([{"name": "S", "clearance": {"issuer": "WCB", "issued": day(-100), "number": "1"}, "insurance": INS}])
+    got = codes(audit(bare, on=ON))
+    assert "clearance_no_expiry" in got and "clearance_expired" not in got

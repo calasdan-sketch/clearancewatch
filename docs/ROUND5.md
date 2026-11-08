@@ -29,7 +29,7 @@ Proof, on a freshly built wheel (not editable):
 | Upgrade-path tester | 0.1.0 jobs files still load (3 random files x 40 jobs through the real 0.1.0 wheel and this tree: no file rejected; every difference is a documented change: new info/warn codes, `clearance_expires_during_job` error to warn on long jobs, bare `WCB` no longer gets 90 days). | `pip download clearancewatch==0.1.0 --no-deps`, two venvs, same files, same `--on`, diff of (severity, code, subject) | documented in README "Coming from 0.1.0" |
 | Upgrade-path tester | A 0.1.0 `--json` report (no `job`/`sub` keys) was refused as a `--baseline`. | `clearancewatch audit ... --baseline old.json` exit 2 | fixed |
 | Upgrade-path tester | 0.1.0 accepted `"start": "20260101"` on Python 3.11+ (it calls `date.fromisoformat`); 0.2.0 refuses it with a clear exit-2 message. | ran both | kept strict (deliberate since Round 3), documented |
-| QA / test methodology (mutation) | `bench/mutate.py` flips one comparison / and-or / not at a time in `audit.py` and `money.py` (188 mutants) and runs the tests. Existing suite killed 120 (63%). Survivors were almost all "exactly on the day" boundaries (`<` vs `<=` on expiry, horizon, cover date, payment date). | `python bench/mutate.py` | fixed with `tests/test_boundaries.py` (every expiry kind x job end x days-to-expiry against an independent oracle); second pass 186/188; the two survivors got tests (WSIB certificate on an AB job stays a certificate; five-name cap); final pass below |
+| QA / test methodology (mutation) | `bench/mutate.py` flips one comparison / and-or / not at a time in `audit.py` and `money.py` (188 mutants) and runs the tests. Existing suite killed 120 (63%). Survivors were almost all "exactly on the day" boundaries (`<` vs `<=` on expiry, horizon, cover date, payment date). | `python bench/mutate.py` | fixed with `tests/test_boundaries.py` (every expiry kind x job end x days-to-expiry against an independent oracle) and `tests/test_edges.py` (gaps, one-day certificates, long-job switch at exactly 90 days, payment day, limit-parser ceilings). **Correction:** my second pass reported 186/188, but at that moment the suite contained an intermittently failing property test (a real order-dependence bug, fixed afterwards), which killed mutants for the wrong reason; that number is discarded. Honest sequence: 63% (first), 84% (stable suite with the new tests), 97% (after `test_edges.py`: 183/188). Two of the last 5 survivors were then killed by one more test (checked by applying the two changes by hand); the other 3 (tie-break in picking the newest certificate, which board is named when two letters have the same date, `>` vs `>=` on a one-item list) change no output |
 | QA / test methodology (property-based) | Properties: audit is deterministic; sub order never changes what is found; renewals is a subset of audit; every code has an action; no report format emits control or bidi characters; limit parser total; clean functions total. 300 seeded jobs (always) + hypothesis (if installed) + a one-off 20,000-job run: 0 failures after the two fixes above. | `pytest tests/test_properties.py` | DONE |
 | QA / test methodology (golden files) | One fixed defects file through all 8 outputs (text, md, csv, json, github, ics, renewals, payment) byte for byte; includes an ESC sequence and a quote/comma name to prove escaping. `UPDATE_GOLDEN=1` regenerates after an intended change. | `pytest tests/test_golden.py` | DONE |
 | QA / differential | The previous version (0.1.0 wheel) acted as the reference implementation for 120 jobs (above); there is no outside reference for WSIB/WCB rules. | see upgrade row | done as far as possible |
@@ -46,12 +46,12 @@ Proof, on a freshly built wheel (not editable):
 ## Numbers
 | | before (82d2da0) | after |
 |---|---|---|
-| tests | 166 | 386 (385 on Python 3.11/3.12 where one optional test skips) |
+| tests | 166 | 410 (one optional test skips on Python 3.11/3.12) |
 | planted defects caught | 84/84 (21 kinds) | 100/100 (25 kinds) |
 | false alarms | 0/30 | 0/36 |
 | date-column stand-in | 20/84 | 20/100 |
 | speed, same VM, same minute | about 117,000 sub audits/s | about 107,000 (new checks cost ~8%) |
-| mutation score (`bench/mutate.py`) | 63% (120/188) | FINAL_MUT |
+| mutation score (`bench/mutate.py`, 188 mutants) | 63% (120/188) | 97% (183/188), 98% counting the two killed by hand-check |
 
 ## 25 ideas, scored (1 low - 5 high; effort and risk: 1 low - 5 high)
 

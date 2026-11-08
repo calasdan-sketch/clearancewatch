@@ -212,7 +212,7 @@ Round 5 compared the previous commit and this one back to back on the same quiet
 
 History: round 2 measured 64/64 on 16 kinds; round 4 84/84 on 21 kinds; round 5 added 4 kinds (Manitoba status x2, work started before the clearance, umbrella text) and the clean jobs with deductibles and Manitoba letters (the first version of the Manitoba clean jobs found a bug in the corpus itself: extra subs kept Ontario certificates). An earlier README said "~130,000 sub audits/s"; that figure was not reproducible and was removed.
 
-Honest caveat: I wrote both the corpus and the checks, so 100/100 shows the checks do what they claim and guards against regressions. It does not predict accuracy on your real documents, and the stand-in is not any commercial product. Separate from the benchmark, `python bench/mutate.py` breaks the checks one condition at a time and counts how many of those breakages the tests notice (Round 5: 63% before the new boundary/golden/property tests, 98% after).
+Honest caveat: I wrote both the corpus and the checks, so 100/100 shows the checks do what they claim and guards against regressions. It does not predict accuracy on your real documents, and the stand-in is not any commercial product. Separate from the benchmark, `python bench/mutate.py` breaks the checks one condition at a time and counts how many of those breakages the tests notice (Round 5: 63% on the first run, 97% after the new boundary, edge, golden and property tests; the 5 survivors left then were: 2 killed by one more test, 3 that change no output).
 
 ## Limits
 
