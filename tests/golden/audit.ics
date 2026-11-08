@@ -1,0 +1,58 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Calas Automations Inc.//clearancewatch//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:723f2e708a4f75a326fbf53d214f4b57@clearancewatch.invalid
+DTSTAMP:20260215T000000Z
+DTSTART;VALUE=DATE:20260410
+SUMMARY:clearance_expires_during_job: Kitchen reno / Bob's Drywall
+DESCRIPTION:clearance expires 2026-04-10 before job end 2026-05-30\; the jo
+ b is longer than one 90-day clearance\, so plan a renewal before that date
+  Request a renewed clearance\; diarise it before the expiry date
+BEGIN:VALARM
+ACTION:DISPLAY
+TRIGGER:-P14D
+DESCRIPTION:clearance_expires_during_job
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:2e966f9f62b641bb66eddfbdaf483261@clearancewatch.invalid
+DTSTAMP:20260215T000000Z
+DTSTART;VALUE=DATE:20260305
+SUMMARY:insurance_expires_during_job: Kitchen reno / Bob's Drywall
+DESCRIPTION:insurance expires 2026-03-05 before job end Request a renewal c
+ ertificate
+BEGIN:VALARM
+ACTION:DISPLAY
+TRIGGER:-P14D
+DESCRIPTION:insurance_expires_during_job
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:f06a16a300af235468c4794f88409261@clearancewatch.invalid
+DTSTAMP:20260215T000000Z
+DTSTART;VALUE=DATE:20260220
+SUMMARY:licence_expires_during_job: Kitchen reno / Bob's Drywall
+DESCRIPTION:Fall protection expires 2026-02-20 before job end Request the r
+ enewed licence
+BEGIN:VALARM
+ACTION:DISPLAY
+TRIGGER:-P14D
+DESCRIPTION:licence_expires_during_job
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:626eb068063ebb335c00b69226cea4e0@clearancewatch.invalid
+DTSTAMP:20260215T000000Z
+DTSTART;VALUE=DATE:20260228
+SUMMARY:insurance_expires_during_job: Calgary shell / North Roofing
+DESCRIPTION:insurance expires 2026-02-28 before job end Request a renewal c
+ ertificate
+BEGIN:VALARM
+ACTION:DISPLAY
+TRIGGER:-P14D
+DESCRIPTION:insurance_expires_during_job
+END:VALARM
+END:VEVENT
+END:VCALENDAR

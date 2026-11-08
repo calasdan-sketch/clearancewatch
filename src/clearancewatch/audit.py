@@ -20,7 +20,7 @@ from functools import lru_cache
 from typing import Dict, List, Optional
 
 from .model import Clearance, Job, Subcontractor, WSIB_DEFAULT_VALID_DAYS
-from .money import parse_limits, primary_limit
+from .money import mentions_excess, parse_limits, primary_limit
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,9 @@ class Finding:
         return out
 
 
-_PROVINCES = {"ON": "ON", "ONTARIO": "ON", "AB": "AB", "ALBERTA": "AB"}
+_PROVINCES = {"ON": "ON", "ONTARIO": "ON", "AB": "AB", "ALBERTA": "AB", "MB": "MB", "MANITOBA": "MB"}
+_LETTER_PROVINCES = ("AB", "MB")  # boards whose clearance is a dated letter, not a certificate with an expiry
+_BOARD = {"AB": "WCB Alberta", "MB": "WCB Manitoba"}
 
 
 @lru_cache(maxsize=1024)
@@ -54,7 +56,7 @@ def _province(value: str) -> str:
 
 @lru_cache(maxsize=1024)
 def _issuer_family(issuer: str) -> str:
-    """ON (WSIB), AB (WCB Alberta), WCB (some other/unspecified WCB), or ''.
+    """ON (WSIB), AB (WCB Alberta), MB (WCB Manitoba), WCB (some other/unspecified WCB), or ''.
 
     Matches whole words, so 'WCB Labrador' is not mistaken for Alberta.
     """
@@ -62,10 +64,41 @@ def _issuer_family(issuer: str) -> str:
     if "WSIB" in words:
         return "ON"
     if "WCB" in words or "WORKERS" in words:
-        return "AB" if ({"AB", "ALBERTA", "WCBAB"} & words) else "WCB"
+        if {"AB", "ALBERTA", "WCBAB"} & words:
+            return "AB"
+        return "MB" if ({"MB", "MANITOBA", "WCBMB"} & words) else "WCB"
     if "WCBAB" in words:
         return "AB"
+    if "WCBMB" in words:
+        return "MB"
     return ""
+
+
+def _eff_family(c: Clearance, prov: str) -> str:
+    """The board a certificate belongs to. A bare "WCB" (or no issuer) on an Alberta/Manitoba job
+    with no stated expiry is read as that province's letter; anything else keeps what the issuer says."""
+    fam = _issuer_family(c.issuer)
+    if fam in ("", "WCB") and prov in _LETTER_PROVINCES and c.expires is None:
+        return prov
+    return fam
+
+
+def _is_letter(c: Clearance, prov: str) -> bool:
+    return _eff_family(c, prov) in _LETTER_PROVINCES or c.covered_until is not None
+
+
+def _status_kind(status: str) -> str:
+    """'' (not given), good, deemed_worker, not_good (deemed/default or negated) or unknown."""
+    n = re.sub(r"[^a-z]+", " ", (status or "").lower()).strip()
+    if not n:
+        return ""
+    if "default" in n or re.search(r"\b(not|no|without)\b", n):
+        return "not_good"
+    if "deemed" in n:
+        return "deemed_worker"
+    if "good standing" in n:
+        return "good"
+    return "unknown"
 
 
 def _names(names: List[str], limit: int = 5) -> str:
@@ -142,10 +175,44 @@ def _check_gaps(x: _Ctx, certs: List[Clearance], on: dt.date, valid_days: int) -
         reach = max(reach, e)
 
 
+def _check_status(x: _Ctx, c: Clearance) -> None:
+    """The standing WCB Manitoba prints on a clearance letter (good standing / deemed worker / deemed/default)."""
+    kind = _status_kind(c.status)
+    if kind == "deemed_worker":
+        x.add("warn", "clearance_status_deemed_worker",
+              f"status {c.status!r}: WCB Manitoba treats this firm as your worker, so you report the labour "
+              "portion of its contract in your payroll and report its injuries (you may not deduct that cost from it)")
+    elif kind == "not_good":
+        x.add("error", "clearance_status_not_good",
+              f"status {c.status!r}: the firm is not in good standing with its workers' compensation board; "
+              "you may be liable for its assessments. Resolve before more work or payment")
+    elif kind == "unknown":
+        x.add("warn", "clearance_status_unrecognised",
+              f"status {c.status!r} is not one of: good standing, deemed worker, deemed/default (read the letter)")
+
+
+def _check_started_before_clearance(x: _Ctx, certs: List[Clearance], prov: str) -> None:
+    """WCB Alberta and WCB Manitoba both say to get the clearance before work starts."""
+    start = x.sub.start
+    if start is None or not (prov in _LETTER_PROVINCES or any(_is_letter(c, prov) for c in certs)):
+        return
+    dated = [c.issued for c in certs if c.issued]
+    if dated and min(dated) > start:
+        x.add("warn", "clearance_after_work_started",
+              f"work started {start.isoformat()} but the earliest clearance on file is dated {min(dated).isoformat()}; "
+              "the regulators say to get a clearance before work starts (if an earlier one exists, add it to "
+              "clearances)")
+
+
 def _check_clearance(x: _Ctx, on: dt.date, horizon: int, valid_days: int, strict_whole_job: bool = False) -> None:
     job, sub = x.job, x.sub
     certs = sub.all_clearances()
     if not certs:
+        if sub.supply_only:
+            x.add("info", "clearance_supply_only",
+                  "recorded as supplying material only. WCB Manitoba says clearance letters are not required for "
+                  "those firms; confirm that is true for this sub and province before relying on it")
+            return
         if sub.clearance_exempt:
             x.add("info", "clearance_exempt",
                   f"no clearance on file; recorded as not needed because: {sub.clearance_exempt}. "
@@ -157,8 +224,8 @@ def _check_clearance(x: _Ctx, on: dt.date, horizon: int, valid_days: int, strict
     prov = _province(job.province)
 
     family = _issuer_family(c.issuer)
-    wanted = prov if prov in ("ON", "AB") else ""
-    if wanted and family and family != wanted and not (wanted == "AB" and family == "WCB"):
+    wanted = prov if prov in ("ON", "AB", "MB") else ""
+    if wanted and family and family != wanted and not (wanted in _LETTER_PROVINCES and family == "WCB"):
         x.add("warn", "issuer_mismatch",
               f"job is in {job.province} but clearance issuer is {c.issuer!r}")
     elif not wanted and prov:
@@ -168,8 +235,10 @@ def _check_clearance(x: _Ctx, on: dt.date, horizon: int, valid_days: int, strict
     for cert in certs:
         _check_dates_sane(x, cert, _issuer_family(cert.issuer), on, valid_days)
     _check_gaps(x, certs, on, valid_days)
+    _check_status(x, c)
+    _check_started_before_clearance(x, certs, prov)
 
-    if family == "AB" or c.covered_until is not None:
+    if _is_letter(c, prov):
         # Alberta letters: cover work done up to the letter date
         cover = c.covered_until or c.issued
         if cover is None:
@@ -215,28 +284,31 @@ def _check_clearance(x: _Ctx, on: dt.date, horizon: int, valid_days: int, strict
 
 
 def _check_payments(x: _Ctx, on: dt.date, valid_days: int) -> None:
-    """Planned payment dates vs the clearance on file (WCB Alberta: get one before releasing payment)."""
+    """Planned payment dates vs the clearance on file (WCB Alberta and Manitoba: get one before paying)."""
     certs = x.sub.all_clearances()
     if not certs or not x.job.payment_dates:
         return
+    prov = _province(x.job.province)
     for pay in sorted(set(x.job.payment_dates)):
         if pay < on:
             continue  # already paid: nothing left to act on
         ok = False
         latest_cover: Optional[dt.date] = None
+        board = ""
         for c in certs:
-            alberta = _issuer_family(c.issuer) == "AB" or c.covered_until is not None
-            if alberta:
+            if _is_letter(c, prov):
                 cover = c.covered_until or c.issued
-                latest_cover = max(filter(None, [latest_cover, cover]), default=None)
+                if cover is not None and (latest_cover is None or cover > latest_cover):
+                    latest_cover = cover
+                    board = _BOARD.get(_eff_family(c, prov), "the board")
                 if cover is not None and cover >= pay:
                     ok = True
             else:
-                exp = _expiry(c, _province(x.job.province), valid_days)
+                exp = _expiry(c, prov, valid_days)
                 if exp is not None and exp >= pay and (c.issued is None or c.issued <= pay):
                     ok = True
         if not ok:
-            extra = (f" (latest letter is dated {latest_cover.isoformat()}; WCB Alberta does not state how long "
+            extra = (f" (latest letter is dated {latest_cover.isoformat()}; {board} does not state how long "
                      "a letter stays good, so request a fresh one before paying)") if latest_cover else ""
             x.add("warn", "clearance_not_valid_at_payment",
                   f"planned payment {pay.isoformat()} is after the clearance on file stops covering it{extra}")
@@ -260,6 +332,11 @@ def _check_insurance(x: _Ctx, on: dt.date, horizon: int) -> None:
                 x.add("warn", "insurance_limit_ambiguous",
                       f"coverage {ins.coverage!r} lists several amounts and the first (C${amount:,}) is below the "
                       f"C${minimum:,} minimum; cannot tell which is the per-occurrence limit. Read the certificate")
+            elif mentions_excess(ins.coverage):
+                x.add("warn", "insurance_limit_includes_umbrella",
+                      f"coverage {ins.coverage!r} (primary C${amount:,}) is below the C${minimum:,} minimum but "
+                      "mentions an umbrella/excess layer; the tool does not add layers together. Check whether "
+                      "your contract lets umbrella or excess count toward the minimum")
             else:
                 x.add("error", "insurance_below_minimum",
                       f"coverage {ins.coverage!r} (C${amount:,}) is below the job minimum C${minimum:,}")
@@ -335,7 +412,7 @@ def _check_job(job: Job, out: List[Finding]) -> None:
     for n, names in seen_numbers.items():
         if len(names) > 1:
             out.append(Finding("warn", "clearance_number_shared", job.name,
-                               f"clearance number {n} appears on different subs: {_names(list(names))} "
+                               f"clearance number {n} appears on different subs: {_names(sorted(names))} "
                                "(copy-paste error, or a sub using someone else's certificate)",
                                job.name, ""))
 

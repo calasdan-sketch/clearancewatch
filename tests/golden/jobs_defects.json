@@ -1,0 +1,43 @@
+[
+  {
+    "name": "Kitchen reno",
+    "province": "ON",
+    "start": "2026-02-01",
+    "end": "2026-05-30",
+    "requirements": { "min_liability": "C$2M", "additional_insured": true, "required_licences": { "electrical": "electrician" } },
+    "payment_dates": ["2026-03-01"],
+    "subs": [
+      { "name": "Bob's Drywall", "trade": "drywall",
+        "clearance": { "issuer": "WSIB", "number": "1234567", "issued": "2026-01-10", "expires": "2026-04-10" },
+        "insurance": { "provider": "Aviva", "policy": "GL-9", "coverage": "C$1M + C$1M umbrella", "expires": "2026-03-05" },
+        "licences": [ { "name": "Fall protection", "expires": "2026-02-20" } ] },
+      { "name": "Sparky\u001b[31m Ltd, \"Electric\"", "trade": "electrical",
+        "insurance": { "provider": "X", "policy": "Y", "coverage": "1/2M", "additional_insured": false, "expires": "2027-01-01" } }
+    ]
+  },
+  {
+    "name": "Winnipeg infill",
+    "province": "MB",
+    "start": "2026-02-01",
+    "end": "2026-06-30",
+    "payment_dates": ["2026-03-01"],
+    "subs": [
+      { "name": "Prairie Framing", "start": "2026-02-01",
+        "clearance": { "issuer": "WCB Manitoba", "number": "77", "issued": "2026-02-10", "status": "deemed worker" },
+        "insurance": { "provider": "A", "policy": "P", "coverage": "$5,000 deductible, C$2M", "expires": "2027-01-01" } },
+      { "name": "Lumber Yard", "supply_only": true,
+        "insurance": { "provider": "A", "policy": "P", "expires": "2027-01-01" } },
+      { "name": "Red River =Electric", "clearance": { "issuer": "WCB", "issued": "2026-02-12", "status": "deemed/default" } }
+    ]
+  },
+  {
+    "name": "Calgary shell",
+    "province": "AB",
+    "end": "2026-07-01",
+    "subs": [
+      { "name": "North Roofing",
+        "clearance": { "issuer": "WCB-AB", "number": "5", "issued": "2026-01-05" },
+        "insurance": { "provider": "A", "policy": "P", "expires": "2026-02-28" } }
+    ]
+  }
+]

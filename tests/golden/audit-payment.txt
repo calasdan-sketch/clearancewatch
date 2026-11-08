@@ -1,0 +1,26 @@
+WARN  clearance_expires_during_job Kitchen reno / Bob's Drywall: clearance expires 2026-04-10 before job end 2026-05-30; the job is longer than one 90-day clearance, so plan a renewal before that date
+WARN  clearance_not_valid_at_payment Kitchen reno / Bob's Drywall: planned payment 2026-04-15 is after the clearance on file stops covering it
+WARN  insurance_limit_includes_umbrella Kitchen reno / Bob's Drywall: coverage 'C$1M + C$1M umbrella' (primary C$1,000,000) is below the C$2,000,000 minimum but mentions an umbrella/excess layer; the tool does not add layers together. Check whether your contract lets umbrella or excess count toward the minimum
+WARN  insurance_endorsement_unconfirmed Kitchen reno / Bob's Drywall: contract requires additional insured; nothing recorded for this certificate (read the endorsement)
+WARN  insurance_expires_during_job Kitchen reno / Bob's Drywall: insurance expires 2026-03-05 before job end
+WARN  licence_expires_during_job   Kitchen reno / Bob's Drywall: Fall protection expires 2026-02-20 before job end
+ERROR clearance_missing            Kitchen reno / Sparky\u001b[31m Ltd, "Electric": no clearance certificate on file
+WARN  insurance_limit_unreadable   Kitchen reno / Sparky\u001b[31m Ltd, "Electric": cannot check the C$2,000,000 minimum: coverage '1/2M' is unreadable (the small number 1 is not a dollar amount; shorthand such as 1/2M is ambiguous)
+ERROR insurance_endorsement_missing Kitchen reno / Sparky\u001b[31m Ltd, "Electric": contract requires additional insured; certificate says no
+ERROR licence_missing              Kitchen reno / Sparky\u001b[31m Ltd, "Electric": trade 'electrical' needs a licence matching 'electrician'; none on file
+WARN  clearance_status_deemed_worker Winnipeg infill / Prairie Framing: status 'deemed worker': WCB Manitoba treats this firm as your worker, so you report the labour portion of its contract in your payroll and report its injuries (you may not deduct that cost from it)
+WARN  clearance_after_work_started Winnipeg infill / Prairie Framing: work started 2026-02-01 but the earliest clearance on file is dated 2026-02-10; the regulators say to get a clearance before work starts (if an earlier one exists, add it to clearances)
+WARN  clearance_cover_lapsed       Winnipeg infill / Prairie Framing: letter covers work up to 2026-02-10; work continues past it (request a fresh clearance at the next installment)
+WARN  clearance_not_valid_at_payment Winnipeg infill / Prairie Framing: planned payment 2026-03-01 is after the clearance on file stops covering it (latest letter is dated 2026-02-10; WCB Manitoba does not state how long a letter stays good, so request a fresh one before paying)
+WARN  clearance_not_valid_at_payment Winnipeg infill / Prairie Framing: planned payment 2026-04-15 is after the clearance on file stops covering it (latest letter is dated 2026-02-10; WCB Manitoba does not state how long a letter stays good, so request a fresh one before paying)
+INFO  clearance_supply_only        Winnipeg infill / Lumber Yard: recorded as supplying material only. WCB Manitoba says clearance letters are not required for those firms; confirm that is true for this sub and province before relying on it
+ERROR clearance_status_not_good    Winnipeg infill / Red River =Electric: status 'deemed/default': the firm is not in good standing with its workers' compensation board; you may be liable for its assessments. Resolve before more work or payment
+WARN  clearance_cover_lapsed       Winnipeg infill / Red River =Electric: letter covers work up to 2026-02-12; work continues past it (request a fresh clearance at the next installment)
+WARN  clearance_not_valid_at_payment Winnipeg infill / Red River =Electric: planned payment 2026-03-01 is after the clearance on file stops covering it (latest letter is dated 2026-02-12; WCB Manitoba does not state how long a letter stays good, so request a fresh one before paying)
+WARN  clearance_not_valid_at_payment Winnipeg infill / Red River =Electric: planned payment 2026-04-15 is after the clearance on file stops covering it (latest letter is dated 2026-02-12; WCB Manitoba does not state how long a letter stays good, so request a fresh one before paying)
+ERROR insurance_missing            Winnipeg infill / Red River =Electric: no insurance on file
+WARN  clearance_cover_lapsed       Calgary shell / North Roofing: letter covers work up to 2026-01-05; work continues past it (request a fresh clearance at the next installment)
+WARN  clearance_not_valid_at_payment Calgary shell / North Roofing: planned payment 2026-04-15 is after the clearance on file stops covering it (latest letter is dated 2026-01-05; WCB Alberta does not state how long a letter stays good, so request a fresh one before paying)
+WARN  insurance_expires_during_job Calgary shell / North Roofing: insurance expires 2026-02-28 before job end
+
+5 error(s), 18 warning(s), 1 note(s) — FAIL

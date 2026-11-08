@@ -76,8 +76,10 @@ class Clearance:
     issued: Optional[dt.date] = None
     expires: Optional[dt.date] = None
     covered_until: Optional[dt.date] = None  # Alberta-style letter coverage
+    # Standing printed on the letter (WCB Manitoba): "good standing", "deemed worker", "deemed/default".
+    status: str = ""
 
-    _KEYS = {"issuer", "number", "issued", "expires", "covered_until"}
+    _KEYS = {"issuer", "number", "issued", "expires", "covered_until", "status"}
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any], path: str = "clearance",
@@ -88,10 +90,11 @@ class Clearance:
         return cls(issuer=_text(d, "issuer", path), number=_text(d, "number", path),
                    issued=parse_date(d.get("issued"), f"{path}.issued"),
                    expires=parse_date(d.get("expires"), f"{path}.expires"),
-                   covered_until=parse_date(d.get("covered_until"), f"{path}.covered_until"))
+                   covered_until=parse_date(d.get("covered_until"), f"{path}.covered_until"),
+                   status=_text(d, "status", path).strip())
 
     def is_blank(self) -> bool:
-        return not (self.issuer or self.issued or self.expires or self.covered_until)
+        return not (self.issuer or self.issued or self.expires or self.covered_until or self.status)
 
     def effective_expiry(self, valid_days: int = WSIB_DEFAULT_VALID_DAYS) -> Optional[dt.date]:
         if self.expires:
@@ -162,9 +165,15 @@ class Subcontractor:
     # Why no clearance is needed (e.g. "sole proprietor, no workers"). Reported as a note
     # for a human to confirm; it only applies while no clearance is on file.
     clearance_exempt: str = ""
+    # The day this sub's own work starts (optional). WCB Alberta and WCB Manitoba say to get the
+    # clearance before work starts, so a clearance dated after this day is flagged.
+    start: Optional[dt.date] = None
+    # True when the sub only supplies material. WCB Manitoba says clearance letters are not
+    # required for those firms. Reported as a note for a human to confirm.
+    supply_only: Optional[bool] = None
 
     _KEYS = {"name", "province", "trade", "clearance", "clearances", "insurance", "licences",
-             "clearance_exempt"}
+             "clearance_exempt", "start", "supply_only"}
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any], path: str = "sub",
@@ -189,6 +198,8 @@ class Subcontractor:
             licences=[Licence.from_dict(x, f"{path}.licences[{i}]", notes) for i, x in enumerate(lic_raw)],
             clearances=hist,
             clearance_exempt=_text(d, "clearance_exempt", path).strip(),
+            start=parse_date(d.get("start"), f"{path}.start"),
+            supply_only=_flag(d, "supply_only", path),
         )
 
     def all_clearances(self) -> List[Clearance]:

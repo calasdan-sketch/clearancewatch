@@ -38,14 +38,16 @@ def _obj(props: Dict[str, Any], **extra: Any) -> Dict[str, Any]:
 
 
 def jobs_schema() -> Dict[str, Any]:
-    clearance = _obj({"issuer": _TEXT, "number": _TEXT, "issued": _DATE, "expires": _DATE, "covered_until": _DATE})
+    clearance = _obj({"issuer": _TEXT, "number": _TEXT, "issued": _DATE, "expires": _DATE, "covered_until": _DATE,
+                       "status": _TEXT})
     insurance = _obj({"provider": _TEXT, "policy": _TEXT, "coverage": {"type": ["string", "number", "null"]},
                       "expires": _DATE, "additional_insured": _BOOL, "waiver_of_subrogation": _BOOL,
                       "primary_noncontributory": _BOOL})
     licence = _obj({"name": _TEXT, "number": _TEXT, "authority": _TEXT, "expires": _DATE})
     sub = _obj({"name": _TEXT, "province": _TEXT, "trade": _TEXT, "clearance": clearance,
                 "clearances": {"type": "array", "items": clearance}, "insurance": insurance,
-                "licences": {"type": "array", "items": licence}, "clearance_exempt": _TEXT},
+                "licences": {"type": "array", "items": licence}, "clearance_exempt": _TEXT,
+                "start": _DATE, "supply_only": _BOOL},
                )
     requirements = _obj({"min_liability": {"type": ["string", "number"]}, "additional_insured": _BOOL,
                          "waiver_of_subrogation": _BOOL, "primary_noncontributory": _BOOL,

@@ -17,8 +17,9 @@ import os
 import sys
 from typing import Dict, List, Tuple
 
-from . import __version__
+from . import __copyright__, __version__
 from .audit import Finding, audit, check_jobs, renewals
+from .importer import ImportError_, rows_to_jobs
 from .model import DataError, Job, parse_date
 from .safe import clean, csv_cell, md_cell
 from .schema import TEMPLATE, jobs_schema
@@ -56,6 +57,7 @@ ACTIONS = {
     "duplicate_sub": "Merge or rename the duplicate entry",
     "unknown_field": "Fix the field name; the value was not used",
     "clearance_not_valid_at_payment": "Request a clearance that covers the payment date before releasing payment",
+    "insurance_limit_includes_umbrella": "Check the contract: may umbrella/excess count toward the minimum?",
     "insurance_limit_ambiguous": "Read the certificate and enter the per-occurrence limit as a number",
     "insurance_endorsement_missing": "Ask the broker for the required endorsement",
     "insurance_endorsement_unconfirmed": "Check the endorsement on the certificate and record true or false",
@@ -63,6 +65,11 @@ ACTIONS = {
     "clearance_exempt": "Confirm the exemption with the regulator and keep the answer on file",
     "job_has_no_subs": "Add the subcontractors for this job, or remove the job",
     "duplicate_job": "Give each job a different name (reports and --baseline match on the job name)",
+    "clearance_after_work_started": "Get the clearance on file now, and add any earlier one to the sub's clearances",
+    "clearance_status_deemed_worker": "Add the labour portion of this contract to your payroll estimate",
+    "clearance_status_not_good": "Ask the sub to resolve its standing with the board before releasing payment",
+    "clearance_status_unrecognised": "Read the letter; record its status (good standing, deemed worker, deemed/default)",
+    "clearance_supply_only": "Confirm the sub only supplies material, and keep the confirmation on file",
 }
 _RANK = {"error": 0, "warn": 1, "info": 2}
 
@@ -197,7 +204,8 @@ def _ics_fold(line: str) -> str:
 def render_ics(findings, on: dt.date) -> str:
     """One all-day event per upcoming expiry, with a 14-day reminder. Only findings that carry a date."""
     stamp = f"{on:%Y%m%d}T000000Z"
-    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//clearancewatch//EN", "CALSCALE:GREGORIAN"]
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Calas Automations Inc.//clearancewatch//EN",
+             "CALSCALE:GREGORIAN"]
     for f in findings:
         if f.due is None or f.severity == "info":
             continue
@@ -283,6 +291,10 @@ def load_baseline(path: str) -> List[Tuple[str, str, str, str]]:
         raise AssertionError  # pragma: no cover
     keys = []
     for f in items:
+        if isinstance(f, dict) and "job" not in f and "sub" not in f and isinstance(f.get("subject"), str):
+            # clearancewatch 0.1.0 reports have only "job / sub" in `subject`; split it back apart
+            job, _, sub = f["subject"].partition(" / ")
+            f = dict(f, job=job, sub=sub)
         if not isinstance(f, dict) or not all(isinstance(f.get(k), str) for k in ("code", "job", "sub", "detail")):
             die(f"{path}: a finding is missing code/job/sub/detail")
         keys.append((f["code"], f["job"], f["sub"], f["detail"]))
@@ -364,11 +376,67 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--include-during-job", action="store_true",
                    help="also list documents that expire before the job ends, however far out")
 
+    ic = sub.add_parser("import-csv", help="turn a spreadsheet export (one row per sub) into a jobs file")
+    ic.add_argument("csv", help="CSV file; - reads stdin (see the README for the column names)")
+    ic.add_argument("-o", "--output", metavar="FILE", help="write the jobs file to FILE (UTF-8) instead of the screen")
+    sub.add_parser("about", help="who makes this, the licence, and where to read the source")
+
     for name, helptext in (("template", "print a starter jobs.json to edit"),
                            ("schema", "print a JSON Schema for the jobs file (for editor validation)")):
         t = sub.add_parser(name, help=helptext)
         t.add_argument("-o", "--output", metavar="FILE", help="write to FILE (UTF-8) instead of the screen")
     return ap
+
+
+ABOUT = (f"clearancewatch {__version__}\n{__copyright__}\nLicence: MIT. Not legal advice.\n"
+         "Source: https://github.com/calasdan-sketch/clearancewatch")
+
+
+def _import_csv(args) -> int:
+    """Spreadsheet rows to a jobs file; the result is checked with the same loader ``audit`` uses."""
+    def die(msg: str):
+        sys.stderr.write(f"clearancewatch: import-csv: {clean(msg, 600)}\n")
+        raise SystemExit(2)
+
+    try:
+        if args.csv == "-":
+            raw = sys.stdin.buffer.read(MAX_BYTES + 1)
+        else:
+            if os.path.getsize(args.csv) > MAX_BYTES:
+                die(f"{args.csv}: file is larger than the {MAX_BYTES} byte limit")
+            with open(args.csv, "rb") as fh:
+                raw = fh.read(MAX_BYTES + 1)
+        if len(raw) > MAX_BYTES:
+            die(f"input is larger than the {MAX_BYTES} byte limit")
+        text = _decode(raw)
+    except FileNotFoundError:
+        die(f"not found: {args.csv}")
+    except IsADirectoryError:
+        die(f"{args.csv} is a folder, not a CSV file")
+    except PermissionError:
+        die(f"cannot read {args.csv}: permission denied")
+    except UnicodeError:
+        die(f"{args.csv}: not readable text (save the CSV as UTF-8)")
+    except OSError as e:
+        die(f"cannot read {args.csv}: {e.strerror or e}")
+    try:
+        jobs, rows = rows_to_jobs(text)
+    except ImportError_ as e:
+        die(str(e))
+    except csv.Error as e:
+        die(f"not a readable CSV: {e}")
+    try:
+        for i, d in enumerate(jobs):  # same strict checks as audit, so a bad date is caught here
+            Job.from_dict(d, f"jobs[{i}]")
+    except DataError as e:
+        die(str(e))
+    out = json.dumps(jobs, indent=2)
+    if args.output:
+        _write_output(args.output, (out + "\n").encode("utf-8"))
+    else:
+        _emit(out)
+    sys.stderr.write(f"clearancewatch: read {rows} row(s) into {len(jobs)} job(s)\n")
+    return 0
 
 
 def _run(args) -> int:
@@ -449,6 +517,11 @@ def main(argv: "list[str] | None" = None) -> int:
             stream.reconfigure(errors="backslashreplace")  # type: ignore[union-attr]
         except (AttributeError, ValueError):
             pass
+    if args.cmd == "about":
+        _emit(ABOUT)
+        return 0
+    if args.cmd == "import-csv":
+        return _import_csv(args)
     if args.cmd in ("template", "schema"):
         text = TEMPLATE if args.cmd == "template" else json.dumps(jobs_schema(), indent=2)
         if args.output:

@@ -25,6 +25,15 @@ _STOP = r"(?:(?!aggregate|agg\b|umbrella|excess)[^0-9]){0,24}?"  # a label past 
 _PER_OCC = re.compile(_STOP + _LABEL, re.I | re.A)
 _OCC_BEFORE = re.compile(_LABEL + r"[^0-9A-Za-z]{0,6}(c?\$)?\s*$", re.I | re.A)
 _SPACE_GROUP = re.compile(r"^[ \t][0-9]{3}(?![0-9])", re.A)
+# An amount that is a deductible/retention is not a limit and must never be read as one.
+_DED_AFTER = re.compile(r"[ \t]*(?:deductible|deduct\.?|ded\b\.?|retention|sir\b|self[- ]insured)", re.I | re.A)
+_DED_BEFORE = re.compile(r"(?:deductible|deduct|retention|sir)[ \t:=]{0,3}(?:c?\$)?[ \t]*$", re.I | re.A)
+_EXCESS = re.compile(r"\b(?:umbrella|excess)\b", re.I | re.A)
+
+
+def mentions_excess(value: object) -> bool:
+    """True when free-text coverage mentions an umbrella or excess layer."""
+    return isinstance(value, str) and bool(_EXCESS.search(value))
 
 
 def parse_limits(value: Union[str, int, float, None]) -> Tuple[List[Tuple[int, bool]], str]:
@@ -82,6 +91,12 @@ def _parse_text(text: str) -> Tuple[Tuple[Tuple[int, bool], ...], str]:
             return (), "unreadable"
         if amount > MAX_LIMIT:
             return (), "implausibly large"
+        if _DED_AFTER.match(after) or _DED_BEFORE.search(text[prev_end:m.start()]):
+            prev_end = m.end() - len(tail) + (um.end() if um else 0)
+            continue  # a deductible or retention, not a limit
+        if mult == 1 and amount < 1000 and not before.endswith("$"):
+            return (), (f"unreadable (the small number {run} is not a dollar amount; "
+                        "shorthand such as 1/2M is ambiguous)")
         after_label = _PER_OCC.match(after)
         labelled = bool(after_label) or bool(_OCC_BEFORE.search(text[prev_end:m.start()]))
         out.append((amount, labelled))

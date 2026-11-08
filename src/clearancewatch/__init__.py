@@ -11,7 +11,9 @@ from .model import Clearance, DataError, Insurance, Job, Licence, Requirements, 
 from .audit import Finding, audit, renewals
 
 __version__ = "0.2.0"
+__author__ = "Calas Automations Inc."
+__copyright__ = "Copyright (c) 2026 Calas Automations Inc."
 __all__ = [
     "Job", "Subcontractor", "Clearance", "Insurance", "Licence", "Requirements", "DataError",
-    "audit", "renewals", "Finding", "__version__",
+    "audit", "renewals", "Finding", "__version__", "__author__",
 ]
